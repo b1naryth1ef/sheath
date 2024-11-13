@@ -8,12 +8,14 @@ import (
 	"net/http"
 )
 
+// LongPollResponse handles the lifecycle of a long-polled HTTP response
 type LongPollResponse struct {
 	w    io.Writer
 	f    http.Flusher
 	Done chan struct{}
 }
 
+// WriteJSON writes the given payload to the client connection
 func (s *LongPollResponse) WriteJSON(data any) error {
 	encoded, err := json.Marshal(data)
 	if err != nil {
@@ -22,6 +24,7 @@ func (s *LongPollResponse) WriteJSON(data any) error {
 	return s.Write(encoded)
 }
 
+// Write writes the raw bytes to the client connection
 func (s *LongPollResponse) Write(data []byte) error {
 	_, err := s.w.Write(append(data, '\n'))
 	if err != nil {
@@ -31,8 +34,10 @@ func (s *LongPollResponse) Write(data []byte) error {
 	return nil
 }
 
+// ErrStreamingUnsupported indicates the client connection does not support streaming
 var ErrStreamingUnsupported = errors.New("streaming unsupported")
 
+// NewLongPollResponse creates a new LongPollResponse for the given context and ResponseWriter
 func NewLongPollResponse(context context.Context, w http.ResponseWriter) (*LongPollResponse, error) {
 	f, ok := w.(http.Flusher)
 	if !ok {
