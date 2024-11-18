@@ -37,6 +37,7 @@ import (
 	"net/http"
 )
 
+// Response wraps a PlayerDB response payload of type T
 type Response[T any] struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -53,13 +54,15 @@ type MinecraftPlayer struct {
 	SkinTexture string `json:"skin_texture"`
 }
 
+// MinecraftPlayerData wraps a MinecraftPlayer as it is returned from the API
 type MinecraftPlayerData struct {
 	Player MinecraftPlayer `json:"player"`
 }
 
 var client = &http.Client{}
 
-// GetMinecraftPlayer fetches a minecraft player by name or id
+// GetMinecraftPlayer fetches a minecraft player by name or ID, returning nil if
+// no result is found for the given parameter.
 func GetMinecraftPlayer(query string) (*Response[MinecraftPlayerData], error) {
 	var result Response[MinecraftPlayerData]
 
@@ -68,6 +71,10 @@ func GetMinecraftPlayer(query string) (*Response[MinecraftPlayerData], error) {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode == 404 {
+		return nil, nil
+	}
 
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("non-200 status code from playerdb: %v", res.StatusCode)

@@ -1,4 +1,4 @@
-package gorm
+package web
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// DBErrorResponse returns either a 404 or 500 response based on the given error
+// DBErrorResponse returns either a 404 or 500 response based on the given error.
 func DBErrorResponse(w http.ResponseWriter, err error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		gores.Error(w, http.StatusNotFound, "not found")
