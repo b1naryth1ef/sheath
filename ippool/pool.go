@@ -37,3 +37,18 @@ func NewPool() *Pool {
 		ips: make([]*net.IPAddr, 0),
 	}
 }
+
+func MakePooled[T any](pool *Pool, size int, factory func(ip *net.IPAddr) (T, error)) ([]T, error) {
+	if size <= 0 {
+		size = pool.Size()
+	}
+	results := make([]T, size)
+	for i := range size {
+		inst, err := factory(pool.N(i))
+		if err != nil {
+			return nil, err
+		}
+		results[i] = inst
+	}
+	return results, nil
+}
