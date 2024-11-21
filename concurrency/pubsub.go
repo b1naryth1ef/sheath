@@ -43,3 +43,17 @@ func (p *PubSub[T]) Subscribe() (<-chan T, func()) {
 		delete(p.subs, p.id)
 	}
 }
+
+// SubscribeBuffered behaves the same as `Subscribe` but allows configuring a
+// buffer size to help avoid dropped messages.
+func (p *PubSub[T]) SubscribeBuffered(bufferSize int) (<-chan T, func()) {
+	p.Lock()
+	defer p.Unlock()
+	p.id += 1
+	p.subs[p.id] = make(chan T, bufferSize)
+	return p.subs[p.id], func() {
+		p.Lock()
+		defer p.Unlock()
+		delete(p.subs, p.id)
+	}
+}
