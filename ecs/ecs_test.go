@@ -1,63 +1,51 @@
 package ecs_test
 
 import (
-	"log"
-	"testing"
+	"fmt"
 
 	"github.com/b1naryth1ef/sheath/ecs"
-	"github.com/stretchr/testify/assert"
 )
 
-type A struct{ A int }
-type B struct{ B string }
-type C struct{ C bool }
-type D struct {
-	X int
-	Y int
+type Position struct {
+	X float32
+	Y float32
 }
 
-func TestBlah(t *testing.T) {
-	universe := ecs.NewUniverse()
-	entityId := universe.Spawn(&A{A: 1}, &B{B: "1"}, &C{C: true})
-	log.Printf("Spawned %v", entityId)
-
-	entity := universe.Get(entityId)
-
-	assert.True(t, entity.Has(&A{}))
-	assert.False(t, entity.Has(&D{}))
-
-	results := ecs.Exec[struct {
-		A *A
-		B *B
-		C *C
-		D *D `ecs:"optional"`
-	}](universe)
-	assert.Equal(t, 1, results.Len())
-
-	for result := range results.Iter() {
-		log.Printf("[%v] %v / %v / %v", entityId, result.A, result.B, result.C)
-	}
+type Name struct {
+	Value string
 }
 
-func BenchmarkUniverse(b *testing.B) {
+type PlayerController struct{}
+
+type EntityView struct {
+	*Position
+	*Name
+}
+
+type PlayerView struct {
+	*Position
+	*Name
+	*PlayerController
+}
+
+func ExampleUniverse() {
 	universe := ecs.NewUniverse()
 
-	for range 10000 {
-		universe.Spawn(&A{A: 1}, &B{B: "1"}, &C{C: true})
+	// Spawn some entities into the universe
+	for i := range 32 {
+		universe.Spawn(&Position{float32(5 * i), float32(10 * i)}, &Name{Value: fmt.Sprintf("Joe #%d", i)})
 	}
 
-	for range b.N {
-		results := ecs.Exec[struct {
-			Id ecs.EntityId
-			A  *A
-			B  *B
-			C  *C
-			D  *D `ecs:"optional"`
-		}](universe)
+	// Create a view for all our entities
+	view := ecs.View[EntityView](universe)
 
-		count := 0
-		for range results.Iter() {
-			count += 1
-		}
+	// Iterate over entities in our view
+	var x, y float32
+	for entity := range view.Iter() {
+		x += entity.X
+		y += entity.Y
 	}
+
+	fmt.Printf("%0.0f, %0.0f\n", x, y)
+	// Output: 2480, 4960
 }

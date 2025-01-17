@@ -1,31 +1,35 @@
 package ecs
 
-import (
-	"reflect"
-)
+import "iter"
 
+// Universe manages everything required for an ECS-based simulation.
 type Universe struct {
-	idInc    EntityId
-	entities map[EntityId]*EntityData
+	storage EntityStorage
 }
 
+// NewUniverse creates a new universe with the basic built-in entity storage
 func NewUniverse() *Universe {
 	return &Universe{
-		entities: make(map[EntityId]*EntityData),
+		storage: NewSimpleEntityStorage(),
 	}
 }
 
-func (u *Universe) Get(id EntityId) *EntityData {
-	return u.entities[id]
-}
-
+// Spawn creates a new entity with the provided components
 func (u *Universe) Spawn(components ...any) EntityId {
-	types := make([]reflect.Type, 0, len(components))
-	for _, comp := range components {
-		types = append(types, reflect.TypeOf(comp))
-	}
-	data := &EntityData{Types: types, Components: components}
-	u.idInc += 1
-	u.entities[u.idInc] = data
-	return u.idInc
+	return u.storage.Create(components...)
+}
+
+// Get returns `EntityData` for the given entity id, or nil if non-existant
+func (u *Universe) Get(id EntityId) EntityData {
+	return u.storage.Get(id)
+}
+
+// Delete removes a entity by id
+func (u *Universe) Delete(id EntityId) {
+	u.storage.Delete(id)
+}
+
+// Filter returns a filtered iterator over all entity data in the storage
+func (u *Universe) Filter(filter EntityFilter) iter.Seq[EntityData] {
+	return u.storage.Filter(filter)
 }
