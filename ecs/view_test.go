@@ -70,6 +70,7 @@ func TestViewIter(t *testing.T) {
 		universe.Spawn(&Position{float32(i), float32(i)}, &Name{Value: fmt.Sprintf("Entity %d", i)})
 	}
 	universe.Spawn(&PlayerController{})
+	universe.Spawn(&PlayerController{}, &Name{Value: "YOLO"})
 
 	view := ecs.View[EntityView](universe)
 	count := 0
@@ -77,6 +78,19 @@ func TestViewIter(t *testing.T) {
 		count += 1
 	}
 	assert.Equal(t, 10000, count)
+
+	otherView := ecs.View[struct {
+		*PlayerController
+		*Position `ecs:"optional"`
+		*Name     `ecs:"excluded"`
+	}](universe)
+
+	count = 0
+	for it := range otherView.Iter() {
+		assert.Nil(t, it.Position)
+		count += 1
+	}
+	assert.Equal(t, 1, count)
 }
 
 func ExampleView() {

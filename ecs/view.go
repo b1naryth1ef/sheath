@@ -3,14 +3,17 @@ package ecs
 import (
 	"iter"
 	"reflect"
+	"strings"
 )
 
 // UniverseView wraps a universe in a struct containing a collection of
 // components. This wrapper provides a variety of utility functions for accessing
 // and iterating over entities that match the given set of components.
 type UniverseView[T any] struct {
-	u     *Universe
-	types []reflect.Type
+	u        *Universe
+	types    []reflect.Type
+	optional []reflect.Type
+	excluded []reflect.Type
 }
 
 // View creates a new UniverseView for the given Universe. The provided type
@@ -23,12 +26,36 @@ func View[T any](u *Universe) *UniverseView[T] {
 		panic("ecs.View() requires a struct-type")
 	}
 
-	types := make([]reflect.Type, 0, typeT.NumField())
+	types := []reflect.Type{}
+	optional := []reflect.Type{}
+	excluded := []reflect.Type{}
 	for i := 0; i < typeT.NumField(); i++ {
-		types = append(types, typeT.Field(i).Type)
+		tag := typeT.Field(i).Tag.Get("ecs")
+
+		isOptional := false
+		isExcluded := false
+		if tag != "" {
+			parts := strings.Split(tag, ",")
+			for _, part := range parts {
+				if part == "optional" {
+					isOptional = true
+				} else if part == "excluded" {
+					isExcluded = true
+				} else {
+					panic("unsupported ecs tag: " + part)
+				}
+			}
+		}
+		if isExcluded {
+			excluded = append(excluded, typeT.Field(i).Type)
+		} else if isOptional {
+			optional = append(optional, typeT.Field(i).Type)
+		} else {
+			types = append(types, typeT.Field(i).Type)
+		}
 	}
 
-	return &UniverseView[T]{u: u, types: types}
+	return &UniverseView[T]{u: u, types: types, optional: optional, excluded: excluded}
 }
 
 // Get returns data for the given entity. If the entity doesn't exist the
@@ -60,13 +87,14 @@ func (v *UniverseView[T]) MaybeGet(id EntityId) (T, bool) {
 
 // Iter returns an iterator over all entities that match this view.
 func (v *UniverseView[T]) Iter() iter.Seq[T] {
+	filter := EntityFilter{
+		ComponentTypes:         v.types,
+		ExcludedComponentTypes: v.excluded,
+	}
 	return func(yield func(T) bool) {
 		var t T
-		for data := range v.u.storage.Filter(EntityFilter{ComponentTypes: v.types}) {
-			// TODO: this is probably a weird case, maybe log?
-			if !data.Fill(&t) {
-				continue
-			}
+		for data := range v.u.storage.Filter(filter) {
+			data.Fill(&t)
 			if !yield(t) {
 				break
 			}

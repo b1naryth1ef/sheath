@@ -28,7 +28,8 @@ type EntityData interface {
 
 // EntityFilter describes a filter that can be applied when iterating over entities
 type EntityFilter struct {
-	ComponentTypes []reflect.Type
+	ComponentTypes         []reflect.Type
+	ExcludedComponentTypes []reflect.Type
 }
 
 // WithComponents creates a copy of this filter with the given components included
@@ -49,21 +50,26 @@ func (e EntityFilter) WithComponentTypes(componentTypes ...reflect.Type) EntityF
 	}
 }
 
-// WithView creates a copy of this filter with the given view structs component
-// types included as required.
-func (e EntityFilter) WithView(view any) EntityFilter {
-	types := []reflect.Type{}
-	viewType := reflect.TypeOf(view).Elem()
-	for i := 0; i < viewType.NumField(); i++ {
-		types = append(types, viewType.Field(i).Type)
+// WithExcludeComponentTypes creates a copy of this filter with the given component
+// types excluded.
+func (e EntityFilter) WithExcludeComponentTypes(componentTypes ...reflect.Type) EntityFilter {
+	return EntityFilter{
+		ExcludedComponentTypes: append(e.ExcludedComponentTypes, componentTypes...),
 	}
-	return e.WithComponentTypes(types...)
 }
 
 // Exec applies this filter to the given entity data returning true if it matches.
 func (e EntityFilter) Exec(target EntityData) bool {
 	if e.ComponentTypes != nil && !target.HasComponents(e.ComponentTypes...) {
 		return false
+	}
+
+	if e.ExcludedComponentTypes != nil {
+		for _, ctype := range e.ExcludedComponentTypes {
+			if target.HasComponents(ctype) {
+				return false
+			}
+		}
 	}
 
 	return true
