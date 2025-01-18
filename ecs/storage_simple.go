@@ -79,9 +79,18 @@ func (s *SimpleEntityData) Id() EntityId {
 	return s.id
 }
 
-// GetComponents implements EntityData.GetComponents
-func (s *SimpleEntityData) GetComponents(components ...any) bool {
-	// TODO: implement this
+// Read implements EntityData.Read
+func (s *SimpleEntityData) Read(component any) bool {
+	targetValue := reflect.ValueOf(component).Elem()
+	targetType := targetValue.Type()
+
+	for index, compType := range s.types {
+		if compType == targetType {
+			targetValue.Set(reflect.ValueOf(s.data[index]))
+			return true
+		}
+	}
+
 	return false
 }
 

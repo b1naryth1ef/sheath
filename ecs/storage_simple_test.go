@@ -24,6 +24,14 @@ func TestSimpleEntityStorage(t *testing.T) {
 	data = storage.Get(id)
 	assert.NotNil(t, data)
 
+	var v1 *V1
+	assert.True(t, data.Read(&v1))
+	assert.Equal(t, uint8(1), v1.A)
+
+	var v4 *V4
+	assert.False(t, data.Read(&v4))
+	assert.Nil(t, v4)
+
 	var fullData struct {
 		*V1
 		*V2

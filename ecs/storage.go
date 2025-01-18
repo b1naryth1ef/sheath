@@ -21,7 +21,7 @@ type EntityStorage interface {
 // copy component data from a variety of memory locations.
 type EntityData interface {
 	Id() EntityId
-	GetComponents(...any) bool
+	Read(any) bool
 	HasComponents(...reflect.Type) bool
 	Fill(any) bool
 }
