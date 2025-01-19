@@ -78,7 +78,7 @@ func (p PermissionOpts) Args() []string {
 		args = parg(args, "allow-net", p.Net)
 	}
 	if p.Env != nil {
-		args = parg(args, "allow-import", p.Import)
+		args = parg(args, "allow-env", p.Env)
 	}
 	if p.Sys != nil {
 		args = parg(args, "allow-sys", p.Sys)
@@ -131,7 +131,6 @@ type Run struct {
 func (r *Run) command() *exec.Cmd {
 	args := []string{
 		"run",
-		"--no-prompt",
 		"--no-lock",
 	}
 	args = append(args, r.BaseOpts.Args()...)
