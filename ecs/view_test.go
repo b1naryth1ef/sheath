@@ -2,6 +2,7 @@ package ecs_test
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/b1naryth1ef/sheath/ecs"
@@ -128,12 +129,51 @@ func ExampleView() {
 	// Output: [Player] 1.34, 7.82
 }
 
-func BenchmarkViewIter(b *testing.B) {
+func createTestUniverse(size int) *ecs.Universe {
 	universe := ecs.NewUniverse()
 
-	for i := range 10000 {
-		universe.Spawn(&Position{float32(i), float32(i)}, &Name{Value: fmt.Sprintf("Entity %d", i)})
+	factories := []func() any{
+		func() any {
+			return &Position{
+				rand.Float32(),
+				rand.Float32(),
+			}
+		},
+		func() any {
+			return &Name{
+				Value: fmt.Sprintf("Entity %d", rand.Int32()),
+			}
+		},
+		func() any {
+			return &V1{A: uint8(rand.Int32())}
+		},
+		func() any {
+			return &V2{B: uint16(rand.Int32())}
+		},
+		func() any {
+			return &V3{C: uint32(rand.Int32())}
+		},
+		func() any {
+			return &V4{D: uint64(rand.Int32())}
+		},
 	}
+
+	for range size {
+		numComponents := rand.IntN(len(factories)-2) + 1
+
+		components := []any{}
+		for _, value := range rand.Perm(numComponents) {
+			components = append(components, factories[value]())
+		}
+
+		universe.Spawn(components...)
+	}
+
+	return universe
+}
+
+func BenchmarkViewIter(b *testing.B) {
+	universe := createTestUniverse(10000)
 
 	view := ecs.View[EntityView](universe)
 
@@ -142,5 +182,27 @@ func BenchmarkViewIter(b *testing.B) {
 		for range view.Iter() {
 			count += 1
 		}
+	}
+}
+
+func BenchmarkViewGet100(b *testing.B) {
+	universe := createTestUniverse(100000)
+
+	view := ecs.View[EntityView](universe)
+
+	for range b.N {
+		for range 100 {
+			id := ecs.EntityId(rand.IntN(99999) + 1)
+			obj := view.Get(id)
+			if obj.Position == nil {
+				panic("position is nil?")
+			}
+		}
+	}
+}
+
+func BenchmarkCreateUniverse(b *testing.B) {
+	for range b.N {
+		createTestUniverse(100000)
 	}
 }
