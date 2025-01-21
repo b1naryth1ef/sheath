@@ -74,6 +74,15 @@ type SimpleEntityData struct {
 	data  []any
 }
 
+func (s *SimpleEntityData) index(typ reflect.Type) int {
+	for idx, compType := range s.types {
+		if compType == typ {
+			return idx
+		}
+	}
+	return -1
+}
+
 // Id implements EntityData.Id
 func (s *SimpleEntityData) Id() EntityId {
 	return s.id
@@ -84,30 +93,50 @@ func (s *SimpleEntityData) Read(component any) bool {
 	targetValue := reflect.ValueOf(component).Elem()
 	targetType := targetValue.Type()
 
-	for index, compType := range s.types {
-		if compType == targetType {
-			targetValue.Set(reflect.ValueOf(s.data[index]))
-			return true
-		}
+	index := s.index(targetType)
+	if index == -1 {
+		return false
 	}
-
-	return false
+	targetValue.Set(reflect.ValueOf(s.data[index]))
+	return true
 }
 
-// HasComponents implements EntityData.HasComponents
-func (s *SimpleEntityData) HasComponents(types ...reflect.Type) bool {
+// HasComponents implements EntityData.HasComponent
+func (s *SimpleEntityData) HasComponent(types ...reflect.Type) bool {
 	for _, compType := range types {
-		matched := false
-		for _, ourCompType := range s.types {
-			if compType == ourCompType {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		index := s.index(compType)
+		if index == -1 {
 			return false
 		}
 	}
+	return true
+}
+
+func (s *SimpleEntityData) GetComponent(componentType reflect.Type) any {
+	index := s.index(componentType)
+	if index == -1 {
+		return nil
+	}
+
+	return s.data[index]
+}
+
+func (s *SimpleEntityData) AddComponent(component any) {
+	s.types = append(s.types, reflect.TypeOf(component))
+	s.data = append(s.data, component)
+}
+
+func (s *SimpleEntityData) RemoveComponent(componentType reflect.Type) bool {
+	index := s.index(componentType)
+	if index == -1 {
+		return false
+	}
+
+	s.types[index] = s.types[len(s.types)-1]
+	s.types = s.types[:len(s.types)-1]
+	s.data[index] = s.data[len(s.data)-1]
+	s.data = s.data[:len(s.data)-1]
+
 	return true
 }
 
@@ -124,16 +153,12 @@ func (s *SimpleEntityData) Fill(target any) bool {
 	complete := true
 	for i := 0; i < targetType.NumField(); i++ {
 		field := targetType.Field(i)
-		found := false
-		for idx, typ := range s.types {
-			if typ == field.Type {
-				targetValue.Field(i).Set(reflect.ValueOf(s.data[idx]))
-				found = true
-				break
-			}
-		}
-		if !found {
+
+		index := s.index(field.Type)
+		if index == -1 {
 			complete = false
+		} else {
+			targetValue.Field(i).Set(reflect.ValueOf(s.data[index]))
 		}
 	}
 	return complete

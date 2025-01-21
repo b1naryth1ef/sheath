@@ -22,8 +22,12 @@ type EntityStorage interface {
 type EntityData interface {
 	Id() EntityId
 	Read(any) bool
-	HasComponents(...reflect.Type) bool
 	Fill(any) bool
+
+	HasComponent(...reflect.Type) bool
+	AddComponent(any)
+	GetComponent(reflect.Type) any
+	RemoveComponent(reflect.Type) bool
 }
 
 // EntityFilter describes a filter that can be applied when iterating over entities
@@ -60,13 +64,13 @@ func (e EntityFilter) WithExcludeComponentTypes(componentTypes ...reflect.Type) 
 
 // Exec applies this filter to the given entity data returning true if it matches.
 func (e EntityFilter) Exec(target EntityData) bool {
-	if e.ComponentTypes != nil && !target.HasComponents(e.ComponentTypes...) {
+	if e.ComponentTypes != nil && !target.HasComponent(e.ComponentTypes...) {
 		return false
 	}
 
 	if e.ExcludedComponentTypes != nil {
 		for _, ctype := range e.ExcludedComponentTypes {
-			if target.HasComponents(ctype) {
+			if target.HasComponent(ctype) {
 				return false
 			}
 		}

@@ -9,6 +9,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type WrapperB = *V1
+
+func TestWrapperType(t *testing.T) {
+	universe := ecs.NewUniverse()
+	id := universe.Spawn(WrapperB(&V1{
+		A: 13,
+	}))
+
+	var wrapper WrapperB
+	assert.True(t, universe.Get(id).Read(&wrapper))
+	assert.Equal(t, uint8(13), wrapper.A)
+}
+
 func TestViewSpawn(t *testing.T) {
 	universe := ecs.NewUniverse()
 	view := ecs.View[EntityView](universe)
