@@ -1,6 +1,6 @@
 module github.com/b1naryth1ef/sheath
 
-go 1.24rc1
+go 1.25
 
 require (
 	github.com/alioygur/gores v1.2.2
