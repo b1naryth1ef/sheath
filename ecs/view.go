@@ -3,14 +3,16 @@ package ecs
 import (
 	"iter"
 	"reflect"
+	"unsafe"
 )
 
 // View represents a query for entities with a specific combination of components
 // The type T should be a struct with embedded pointer fields for each component type
 // Named fields can be marked as optional using the `ecs:"optional"` struct tag
 type View[T any] struct {
-	types    []reflect.Type
-	optional []bool // Tracks which components are optional
+	types       []reflect.Type
+	optional    []bool
+	fieldOffset []uintptr
 }
 
 // NewView creates a new view for the given struct type
@@ -27,6 +29,7 @@ func NewView[T any]() *View[T] {
 
 	types := make([]reflect.Type, 0, structType.NumField())
 	optional := make([]bool, 0, structType.NumField())
+	fieldOffset := make([]uintptr, 0, structType.NumField())
 
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
@@ -38,6 +41,7 @@ func NewView[T any]() *View[T] {
 
 		componentType := fieldType.Elem()
 		types = append(types, componentType)
+		fieldOffset = append(fieldOffset, field.Offset)
 
 		// Parse struct tag to check if component is optional
 		// Embedded fields (field.Anonymous) are always required
@@ -56,8 +60,9 @@ func NewView[T any]() *View[T] {
 	}
 
 	return &View[T]{
-		types:    types,
-		optional: optional,
+		types:       types,
+		optional:    optional,
+		fieldOffset: fieldOffset,
 	}
 }
 
@@ -71,24 +76,30 @@ func (v *View[T]) Fill(storage *Storage, id EntityId, ptr *T) bool {
 		return false
 	}
 
-	structValue := reflect.ValueOf(ptr).Elem()
-	structType := structValue.Type()
+	// Use unsafe.Pointer to directly access the struct's memory
+	// This avoids reflection overhead in the hot path
+	structPtr := unsafe.Pointer(ptr)
 
-	for i := 0; i < structType.NumField(); i++ {
-		field := structValue.Field(i)
+	for i := 0; i < len(v.types); i++ {
 		componentType := v.types[i]
-
 		component := archetype.GetComponent(id.Index(), componentType)
+
+		// Calculate the address of the field using the pre-computed offset
+		fieldPtr := unsafe.Pointer(uintptr(structPtr) + v.fieldOffset[i])
+
 		if component == nil {
 			// If this is a required component, fail
 			if !v.optional[i] {
 				return false
 			}
 			// Optional component is missing, set field to nil
-			field.Set(reflect.Zero(field.Type()))
+			// For pointer fields, nil is represented as a zero pointer
+			*(*unsafe.Pointer)(fieldPtr) = nil
 		} else {
-			// Component found, set the field
-			field.Set(reflect.ValueOf(component))
+			// Component found, set the field to point to the component
+			// We need to extract the pointer from the interface{}
+			componentPtr := (*iface)(unsafe.Pointer(&component)).data
+			*(*unsafe.Pointer)(fieldPtr) = componentPtr
 		}
 	}
 
@@ -147,9 +158,9 @@ func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 			// All storages in an archetype have the same capacity and indices
 			firstStorage := archetype.storages[0]
 
-			// Pre-allocate result struct value for reflection operations
+			// Pre-allocate result struct value for unsafe pointer operations
 			var result T
-			resultValue := reflect.ValueOf(&result).Elem()
+			resultPtr := unsafe.Pointer(&result)
 
 			for blockIdx, block := range firstStorage.blocks {
 				for slotIdx := range blockSize {
@@ -161,12 +172,16 @@ func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 					entityIndex := uint32(blockIdx*blockSize + slotIdx)
 					entityId := NewEntityId(archetypeId, entityIndex)
 
-					// Populate all components
+					// Populate all components using unsafe pointer arithmetic
 					allRequiredComponentsFound := true
 					for i, storageIdx := range storageIndices {
+						// Calculate the address of the field using the pre-computed offset
+						fieldPtr := unsafe.Pointer(uintptr(resultPtr) + v.fieldOffset[i])
+
 						if storageIdx == -1 {
 							if v.optional[i] {
-								resultValue.Field(i).Set(reflect.Zero(resultValue.Field(i).Type()))
+								// Optional component not in this archetype, set to nil
+								*(*unsafe.Pointer)(fieldPtr) = nil
 								continue
 							} else {
 								allRequiredComponentsFound = false
@@ -177,7 +192,8 @@ func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 						component := archetype.storages[storageIdx].Get(int(entityIndex))
 						if component == nil {
 							if v.optional[i] {
-								resultValue.Field(i).Set(reflect.Zero(resultValue.Field(i).Type()))
+								// Optional component is missing, set to nil
+								*(*unsafe.Pointer)(fieldPtr) = nil
 								continue
 							} else {
 								allRequiredComponentsFound = false
@@ -185,8 +201,10 @@ func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 							}
 						}
 
-						// Set the field directly
-						resultValue.Field(i).Set(reflect.ValueOf(component))
+						// Set the field to point to the component
+						// Extract the data pointer from the interface{}
+						componentPtr := (*iface)(unsafe.Pointer(&component)).data
+						*(*unsafe.Pointer)(fieldPtr) = componentPtr
 					}
 
 					if !allRequiredComponentsFound {
