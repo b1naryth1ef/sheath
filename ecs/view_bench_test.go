@@ -527,3 +527,175 @@ func BenchmarkViewVsDirectAccess(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkViewOptionalComponent tests performance with optional components
+func BenchmarkViewOptionalComponent(b *testing.B) {
+	b.Run("OneOptional_50Percent", func(b *testing.B) {
+		storage := ecs.NewStorage()
+
+		// 50% have velocity, 50% don't
+		for i := 0; i < 5000; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: rand.Float32(), DY: rand.Float32()})
+		}
+		for i := 0; i < 5000; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		}
+
+		view := ecs.NewView[struct {
+			Position *Position
+			Velocity *Velocity `ecs:"optional"`
+		}]()
+
+		b.ResetTimer()
+		for range b.N {
+			for item := range view.IterValues(storage) {
+				if item.Velocity != nil {
+					item.Position.X += item.Velocity.DX
+				}
+			}
+		}
+	})
+
+	b.Run("OneOptional_25Percent", func(b *testing.B) {
+		storage := ecs.NewStorage()
+
+		// 25% have velocity, 75% don't
+		for i := 0; i < 2500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: rand.Float32(), DY: rand.Float32()})
+		}
+		for i := 0; i < 7500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		}
+
+		view := ecs.NewView[struct {
+			Position *Position
+			Velocity *Velocity `ecs:"optional"`
+		}]()
+
+		b.ResetTimer()
+		for range b.N {
+			for item := range view.IterValues(storage) {
+				if item.Velocity != nil {
+					item.Position.X += item.Velocity.DX
+				}
+			}
+		}
+	})
+
+	b.Run("OneOptional_75Percent", func(b *testing.B) {
+		storage := ecs.NewStorage()
+
+		// 75% have velocity, 25% don't
+		for i := 0; i < 7500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: rand.Float32(), DY: rand.Float32()})
+		}
+		for i := 0; i < 2500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		}
+
+		view := ecs.NewView[struct {
+			Position *Position
+			Velocity *Velocity `ecs:"optional"`
+		}]()
+
+		b.ResetTimer()
+		for range b.N {
+			for item := range view.IterValues(storage) {
+				if item.Velocity != nil {
+					item.Position.X += item.Velocity.DX
+				}
+			}
+		}
+	})
+
+	b.Run("TwoOptional_Mixed", func(b *testing.B) {
+		storage := ecs.NewStorage()
+
+		// Mixed: some with both, some with one, some with neither
+		for i := 0; i < 2500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: rand.Float32(), DY: rand.Float32()}, &Health{Current: 100, Max: 100})
+		}
+		for i := 0; i < 2500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: rand.Float32(), DY: rand.Float32()})
+		}
+		for i := 0; i < 2500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Health{Current: 100, Max: 100})
+		}
+		for i := 0; i < 2500; i++ {
+			storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		}
+
+		view := ecs.NewView[struct {
+			Position *Position
+			Velocity *Velocity `ecs:"optional"`
+			Health   *Health   `ecs:"optional"`
+		}]()
+
+		b.ResetTimer()
+		for range b.N {
+			for item := range view.IterValues(storage) {
+				if item.Velocity != nil {
+					item.Position.X += item.Velocity.DX
+				}
+				if item.Health != nil && item.Health.Current < 50 {
+					item.Position.Y += 1
+				}
+			}
+		}
+	})
+}
+
+// BenchmarkViewOptionalVsRequired compares optional vs all-required views
+func BenchmarkViewOptionalVsRequired(b *testing.B) {
+	b.Run("AllRequired", func(b *testing.B) {
+		storage := ecs.NewStorage()
+
+		for i := 0; i < 10000; i++ {
+			storage.Spawn(
+				&Position{X: float32(i), Y: float32(i)},
+				&Velocity{DX: rand.Float32(), DY: rand.Float32()},
+				&Health{Current: 100, Max: 100},
+			)
+		}
+
+		view := ecs.NewView[struct {
+			Position *Position
+			Velocity *Velocity
+			Health   *Health
+		}]()
+
+		b.ResetTimer()
+		for range b.N {
+			count := 0
+			for range view.Iter(storage) {
+				count++
+			}
+		}
+	})
+
+	b.Run("WithOptional", func(b *testing.B) {
+		storage := ecs.NewStorage()
+
+		for i := 0; i < 10000; i++ {
+			storage.Spawn(
+				&Position{X: float32(i), Y: float32(i)},
+				&Velocity{DX: rand.Float32(), DY: rand.Float32()},
+				&Health{Current: 100, Max: 100},
+			)
+		}
+
+		view := ecs.NewView[struct {
+			Position *Position
+			Velocity *Velocity `ecs:"optional"`
+			Health   *Health   `ecs:"optional"`
+		}]()
+
+		b.ResetTimer()
+		for range b.N {
+			count := 0
+			for range view.Iter(storage) {
+				count++
+			}
+		}
+	})
+}

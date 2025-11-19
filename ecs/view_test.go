@@ -615,9 +615,23 @@ func ExampleView_multipleArchetypes() {
 
 	// This will match entities from archetypes 1, 2, and 3 (all have Position + Velocity)
 	count := 0
+	positions := make([]float32, 0)
 	for item := range view.IterValues(storage) {
 		count++
-		fmt.Printf("Entity %d: position (%.0f, %.0f)\n", count, item.Position.X, item.Position.Y)
+		positions = append(positions, item.Position.X)
+	}
+
+	// Sort positions for consistent output
+	for i := 0; i < len(positions); i++ {
+		for j := i + 1; j < len(positions); j++ {
+			if positions[i] > positions[j] {
+				positions[i], positions[j] = positions[j], positions[i]
+			}
+		}
+	}
+
+	for i, x := range positions {
+		fmt.Printf("Entity %d: position (%.0f, %.0f)\n", i+1, x, x)
 	}
 	fmt.Printf("Total entities with Position and Velocity: %d\n", count)
 
@@ -658,4 +672,339 @@ func ExampleView_filtering() {
 	// Entities with low health:
 	// Position (1, 1): health 25/100
 	// Position (3, 3): health 30/100
+}
+
+// Tests for optional component support
+
+func TestViewOptionalComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	// Entity with both components
+	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
+	// Entity with only Position (Velocity optional)
+	id2 := storage.Spawn(&Position{X: 2, Y: 2})
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}]()
+
+	// Get entity with both components
+	item1 := view.Get(storage, id1)
+	assert.NotNil(t, item1)
+	assert.NotNil(t, item1.Position)
+	assert.NotNil(t, item1.Velocity)
+	assert.Equal(t, float32(1), item1.Position.X)
+	assert.Equal(t, float32(0.1), item1.Velocity.DX)
+
+	// Get entity with only required component
+	item2 := view.Get(storage, id2)
+	assert.NotNil(t, item2)
+	assert.NotNil(t, item2.Position)
+	assert.Nil(t, item2.Velocity) // Optional component is nil
+	assert.Equal(t, float32(2), item2.Position.X)
+}
+
+func TestViewOptionalIterMixedArchetypes(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	// Archetype 1: Position + Velocity
+	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
+	id2 := storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0.2, DY: 0.2})
+
+	// Archetype 2: Position only
+	id3 := storage.Spawn(&Position{X: 3, Y: 3})
+	id4 := storage.Spawn(&Position{X: 4, Y: 4})
+
+	// Archetype 3: Position + Velocity + Health
+	id5 := storage.Spawn(&Position{X: 5, Y: 5}, &Velocity{DX: 0.5, DY: 0.5}, &Health{Current: 100, Max: 100})
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}]()
+
+	entities := make(map[ecs.EntityId]bool)
+	velocityCount := 0
+
+	for id, item := range view.Iter(storage) {
+		entities[id] = true
+		assert.NotNil(t, item.Position)
+
+		if item.Velocity != nil {
+			velocityCount++
+		}
+	}
+
+	// All 5 entities should match (Position is required, Velocity is optional)
+	assert.Equal(t, 5, len(entities))
+	assert.True(t, entities[id1])
+	assert.True(t, entities[id2])
+	assert.True(t, entities[id3])
+	assert.True(t, entities[id4])
+	assert.True(t, entities[id5])
+
+	// Only 3 entities have Velocity
+	assert.Equal(t, 3, velocityCount)
+}
+
+func TestViewMultipleOptionalComponents(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	// All components
+	storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1}, &Health{Current: 100, Max: 100})
+	// Position + Velocity
+	storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0.2, DY: 0.2})
+	// Position + Health
+	storage.Spawn(&Position{X: 3, Y: 3}, &Health{Current: 50, Max: 100})
+	// Position only
+	storage.Spawn(&Position{X: 4, Y: 4})
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+		Health   *Health   `ecs:"optional"`
+	}]()
+
+	count := 0
+	for item := range view.IterValues(storage) {
+		count++
+		assert.NotNil(t, item.Position)
+		// Velocity and Health may or may not be present
+	}
+
+	assert.Equal(t, 4, count)
+}
+
+func TestViewOptionalMutation(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 1, DY: 1})
+	id2 := storage.Spawn(&Position{X: 2, Y: 2})
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}]()
+
+	// Mutate through iterator
+	for item := range view.IterValues(storage) {
+		if item.Velocity != nil {
+			item.Velocity.DX *= 2
+			item.Velocity.DY *= 2
+		}
+	}
+
+	// Verify mutations
+	vel1 := storage.GetComponent(id1, reflect.TypeOf(Velocity{})).(*Velocity)
+	assert.Equal(t, float32(2), vel1.DX)
+	assert.Equal(t, float32(2), vel1.DY)
+
+	// id2 has no Velocity, so nothing to check
+	vel2 := storage.GetComponent(id2, reflect.TypeOf(Velocity{}))
+	assert.Nil(t, vel2)
+}
+
+func TestViewAllOptional(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	storage.Spawn(&Velocity{DX: 1, DY: 1})
+	storage.Spawn(&Health{Current: 100, Max: 100})
+	storage.Spawn(&Velocity{DX: 2, DY: 2}, &Health{Current: 50, Max: 100})
+
+	// Both components optional - matches all entities
+	view := ecs.NewView[struct {
+		Velocity *Velocity `ecs:"optional"`
+		Health   *Health   `ecs:"optional"`
+	}]()
+
+	count := 0
+	for item := range view.IterValues(storage) {
+		count++
+		// At least one should be present (otherwise entity wouldn't exist)
+		assert.True(t, item.Velocity != nil || item.Health != nil)
+	}
+
+	assert.Equal(t, 3, count)
+}
+
+func TestViewFillWithOptional(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id1 := storage.Spawn(&Position{X: 10, Y: 20}, &Velocity{DX: 1, DY: 2})
+	id2 := storage.Spawn(&Position{X: 30, Y: 40})
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}]()
+
+	var result1 struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}
+
+	ok := view.Fill(storage, id1, &result1)
+	assert.True(t, ok)
+	assert.NotNil(t, result1.Position)
+	assert.NotNil(t, result1.Velocity)
+
+	var result2 struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}
+
+	ok = view.Fill(storage, id2, &result2)
+	assert.True(t, ok)
+	assert.NotNil(t, result2.Position)
+	assert.Nil(t, result2.Velocity)
+}
+
+func TestViewEmbeddedAndOptionalMixed(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1}, &Health{Current: 100, Max: 100})
+	id2 := storage.Spawn(&Position{X: 2, Y: 2}, &Health{Current: 50, Max: 100})
+
+	// Mix embedded (required) and named (optional) fields
+	view := ecs.NewView[struct {
+		*Position           // embedded: always required
+		Velocity  *Velocity `ecs:"optional"` // named: optional
+		*Health             // embedded: always required
+	}]()
+
+	// id1 has all components
+	item1 := view.Get(storage, id1)
+	assert.NotNil(t, item1)
+	assert.NotNil(t, item1.Position)
+	assert.NotNil(t, item1.Velocity)
+	assert.NotNil(t, item1.Health)
+
+	// id2 missing Velocity (optional), should still match
+	item2 := view.Get(storage, id2)
+	assert.NotNil(t, item2)
+	assert.NotNil(t, item2.Position)
+	assert.Nil(t, item2.Velocity)
+	assert.NotNil(t, item2.Health)
+}
+
+func TestViewInvalidTag(t *testing.T) {
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r)
+		assert.Contains(t, r.(string), "invalid ecs tag value")
+	}()
+
+	// This should panic due to invalid tag
+	_ = ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"invalid"`
+	}]()
+}
+
+func TestViewOptionalWithDeletedEntities(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
+	id2 := storage.Spawn(&Position{X: 2, Y: 2})
+	id3 := storage.Spawn(&Position{X: 3, Y: 3}, &Velocity{DX: 0.3, DY: 0.3})
+
+	// Delete entity with optional component
+	storage.Delete(id1)
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}]()
+
+	entities := make(map[ecs.EntityId]bool)
+	for id := range view.Iter(storage) {
+		entities[id] = true
+	}
+
+	// Should have 2 entities (id1 deleted)
+	assert.Equal(t, 2, len(entities))
+	assert.False(t, entities[id1])
+	assert.True(t, entities[id2])
+	assert.True(t, entities[id3])
+}
+
+func TestViewOptionalDoesNotAffectRequiredMatching(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	// Entity missing required component (Health)
+	id1 := storage.Spawn(&Position{X: 1, Y: 1})
+	// Entity with all components
+	id2 := storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0.2, DY: 0.2}, &Health{Current: 100, Max: 100})
+
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+		Health   *Health   // required
+	}]()
+
+	entities := make(map[ecs.EntityId]bool)
+	for id := range view.Iter(storage) {
+		entities[id] = true
+	}
+
+	// Only id2 should match (id1 missing required Health)
+	assert.Equal(t, 1, len(entities))
+	assert.False(t, entities[id1])
+	assert.True(t, entities[id2])
+}
+
+// ExampleView_optional demonstrates using optional components in views
+func ExampleView_optional() {
+	storage := ecs.NewStorage()
+
+	// Entities with different health states
+	// Some have health, some don't (invulnerable)
+	storage.Spawn(&Position{X: 10, Y: 10}, &Velocity{DX: 1, DY: 0}, &Health{Current: 50, Max: 100})
+	storage.Spawn(&Position{X: 20, Y: 20}, &Velocity{DX: 0, DY: 1}, &Health{Current: 90, Max: 100})
+	storage.Spawn(&Position{X: 30, Y: 30}, &Velocity{DX: -1, DY: 0}) // No health (invulnerable)
+
+	// Create a view where Health is optional
+	// This matches both vulnerable and invulnerable entities
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity
+		Health   *Health `ecs:"optional"` // Health component is optional
+	}]()
+
+	fmt.Println("All moving entities:")
+
+	// Collect and sort for consistent output
+	type entityInfo struct {
+		x, y   float32
+		health *Health
+	}
+	entities := make([]entityInfo, 0)
+	for item := range view.IterValues(storage) {
+		entities = append(entities, entityInfo{item.Position.X, item.Position.Y, item.Health})
+	}
+
+	// Sort by X position
+	for i := 0; i < len(entities); i++ {
+		for j := i + 1; j < len(entities); j++ {
+			if entities[i].x > entities[j].x {
+				entities[i], entities[j] = entities[j], entities[i]
+			}
+		}
+	}
+
+	for _, e := range entities {
+		if e.health != nil {
+			fmt.Printf("Entity at (%.0f, %.0f) with health %d/%d\n",
+				e.x, e.y, e.health.Current, e.health.Max)
+		} else {
+			fmt.Printf("Invulnerable entity at (%.0f, %.0f)\n", e.x, e.y)
+		}
+	}
+
+	// Output:
+	// All moving entities:
+	// Entity at (10, 10) with health 50/100
+	// Entity at (20, 20) with health 90/100
+	// Invulnerable entity at (30, 30)
 }

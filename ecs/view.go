@@ -7,12 +7,16 @@ import (
 
 // View represents a query for entities with a specific combination of components
 // The type T should be a struct with embedded pointer fields for each component type
+// Named fields can be marked as optional using the `ecs:"optional"` struct tag
 type View[T any] struct {
-	types []reflect.Type
+	types    []reflect.Type
+	optional []bool // Tracks which components are optional
 }
 
 // NewView creates a new view for the given struct type
-// The struct T should have embedded fields that are pointers to component types
+// The struct T should have embedded or named fields that are pointers to component types
+// Embedded fields are always required
+// Named fields can be marked as optional using the `ecs:"optional"` struct tag
 func NewView[T any]() *View[T] {
 	var zero T
 	structType := reflect.TypeOf(zero)
@@ -22,6 +26,7 @@ func NewView[T any]() *View[T] {
 	}
 
 	types := make([]reflect.Type, 0, structType.NumField())
+	optional := make([]bool, 0, structType.NumField())
 
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
@@ -33,12 +38,32 @@ func NewView[T any]() *View[T] {
 
 		componentType := fieldType.Elem()
 		types = append(types, componentType)
+
+		// Parse struct tag to check if component is optional
+		// Embedded fields (field.Anonymous) are always required
+		isOptional := false
+		if !field.Anonymous {
+			tag := field.Tag.Get("ecs")
+			if tag != "" {
+				if tag == "optional" {
+					isOptional = true
+				} else {
+					panic("invalid ecs tag value: \"" + tag + "\" (only \"optional\" is supported)")
+				}
+			}
+		}
+		optional = append(optional, isOptional)
 	}
 
-	return &View[T]{types: types}
+	return &View[T]{
+		types:    types,
+		optional: optional,
+	}
 }
 
 // Fill populates the provided struct pointer with component data for the given entity
+// Returns false if the entity is missing any required components
+// Optional components are set to nil if not present
 func (v *View[T]) Fill(storage *Storage, id EntityId, ptr *T) bool {
 	archetypeId := id.ArchetypeId()
 	archetype, ok := storage.archetypes[archetypeId]
@@ -55,10 +80,16 @@ func (v *View[T]) Fill(storage *Storage, id EntityId, ptr *T) bool {
 
 		component := archetype.GetComponent(id.Index(), componentType)
 		if component == nil {
-			return false
+			// If this is a required component, fail
+			if !v.optional[i] {
+				return false
+			}
+			// Optional component is missing, set field to nil
+			field.Set(reflect.Zero(field.Type()))
+		} else {
+			// Component found, set the field
+			field.Set(reflect.ValueOf(component))
 		}
-
-		field.Set(reflect.ValueOf(component))
 	}
 
 	return true
@@ -74,9 +105,15 @@ func (v *View[T]) Get(storage *Storage, id EntityId) *T {
 	return &result
 }
 
-// matchesArchetype checks if an archetype contains all the component types required by this view
+// matchesArchetype checks if an archetype contains all the required component types for this view
+// Optional components are not checked - they may or may not be present
 func (v *View[T]) matchesArchetype(archetype *Archetype) bool {
-	for _, requiredType := range v.types {
+	for i, requiredType := range v.types {
+		// Skip optional components
+		if v.optional[i] {
+			continue
+		}
+		// Required component must be present
 		if !archetype.HasComponent(requiredType) {
 			return false
 		}
@@ -84,8 +121,9 @@ func (v *View[T]) matchesArchetype(archetype *Archetype) bool {
 	return true
 }
 
-// Iter returns an iterator over all entities that have all the components required by this view
+// Iter returns an iterator over all entities that have all the required components for this view
 // The iterator yields (EntityId, T) pairs where T is the populated view struct
+// Optional components are set to nil if not present
 func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 	return func(yield func(EntityId, T) bool) {
 		for archetypeId, archetype := range storage.archetypes {
@@ -95,10 +133,10 @@ func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 
 			// Pre-compute the mapping from view component types to archetype storage indices
 			storageIndices := make([]int, len(v.types))
-			for i, requiredType := range v.types {
+			for i, componentType := range v.types {
 				storageIndices[i] = -1
 				for idx, archetypeType := range archetype.types {
-					if archetypeType == requiredType {
+					if archetypeType == componentType {
 						storageIndices[i] = idx
 						break
 					}
@@ -123,24 +161,35 @@ func (v *View[T]) Iter(storage *Storage) iter.Seq2[EntityId, T] {
 					entityIndex := uint32(blockIdx*blockSize + slotIdx)
 					entityId := NewEntityId(archetypeId, entityIndex)
 
-					allComponentsFound := true
+					// Populate all components
+					allRequiredComponentsFound := true
 					for i, storageIdx := range storageIndices {
 						if storageIdx == -1 {
-							allComponentsFound = false
-							break
+							if v.optional[i] {
+								resultValue.Field(i).Set(reflect.Zero(resultValue.Field(i).Type()))
+								continue
+							} else {
+								allRequiredComponentsFound = false
+								break
+							}
 						}
 
 						component := archetype.storages[storageIdx].Get(int(entityIndex))
 						if component == nil {
-							allComponentsFound = false
-							break
+							if v.optional[i] {
+								resultValue.Field(i).Set(reflect.Zero(resultValue.Field(i).Type()))
+								continue
+							} else {
+								allRequiredComponentsFound = false
+								break
+							}
 						}
 
 						// Set the field directly
 						resultValue.Field(i).Set(reflect.ValueOf(component))
 					}
 
-					if !allComponentsFound {
+					if !allRequiredComponentsFound {
 						continue
 					}
 
