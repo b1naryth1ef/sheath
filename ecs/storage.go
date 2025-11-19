@@ -1,80 +1,120 @@
 package ecs
 
 import (
-	"iter"
 	"reflect"
+	"sort"
+	"unsafe"
 )
 
-// EntityStorage is the interface which describes the underlying storage of
-// entities and their associated components. You could implement this with a
-// custom storage implementation based on your needs.
-type EntityStorage interface {
-	Get(EntityId) EntityData
-	Create(...any) EntityId
-	Delete(EntityId)
-	Filter(EntityFilter) iter.Seq[EntityData]
+// Storage is the main ECS storage interface
+type Storage struct {
+	archetypes map[uint32]*Archetype
 }
 
-// EntityData is designed to be a reference based wrapper around storage-data for
-// an entity. In the simple case this could just be a struct which stores the
-// required data in memory, however in more complex implementations one could
-// copy component data from a variety of memory locations.
-type EntityData interface {
-	Id() EntityId
-	Read(any) bool
-	Fill(any) bool
-
-	HasComponent(...reflect.Type) bool
-	AddComponent(any)
-	GetComponent(reflect.Type) any
-	RemoveComponent(reflect.Type) bool
-}
-
-// EntityFilter describes a filter that can be applied when iterating over entities
-type EntityFilter struct {
-	ComponentTypes         []reflect.Type
-	ExcludedComponentTypes []reflect.Type
-}
-
-// WithComponents creates a copy of this filter with the given components included
-// as required.
-func (e EntityFilter) WithComponents(components ...any) EntityFilter {
-	additionalTypes := make([]reflect.Type, 0, len(components))
-	for _, comp := range components {
-		additionalTypes = append(additionalTypes, reflect.TypeOf(comp))
-	}
-	return e.WithComponentTypes(additionalTypes...)
-}
-
-// WithComponentTypes creates a copy of this filter with the given component types
-// included as required.
-func (e EntityFilter) WithComponentTypes(componentTypes ...reflect.Type) EntityFilter {
-	return EntityFilter{
-		ComponentTypes: append(e.ComponentTypes, componentTypes...),
+// NewStorage creates a new ECS storage system
+func NewStorage() *Storage {
+	return &Storage{
+		archetypes: make(map[uint32]*Archetype),
 	}
 }
 
-// WithExcludeComponentTypes creates a copy of this filter with the given component
-// types excluded.
-func (e EntityFilter) WithExcludeComponentTypes(componentTypes ...reflect.Type) EntityFilter {
-	return EntityFilter{
-		ExcludedComponentTypes: append(e.ExcludedComponentTypes, componentTypes...),
+// Spawn creates a new entity with the provided components
+func (s *Storage) Spawn(components ...any) EntityId {
+	if len(components) == 0 {
+		panic("cannot spawn entity without components")
 	}
+
+	types := extractComponentTypes(components)
+	archetypeId := hashTypesToUint32(types)
+
+	archetype, exists := s.archetypes[archetypeId]
+	if !exists {
+		archetype = NewArchetype(archetypeId, types)
+		s.archetypes[archetypeId] = archetype
+	}
+
+	entityIndex := archetype.Spawn(components)
+	return NewEntityId(archetypeId, entityIndex)
 }
 
-// Exec applies this filter to the given entity data returning true if it matches.
-func (e EntityFilter) Exec(target EntityData) bool {
-	if e.ComponentTypes != nil && !target.HasComponent(e.ComponentTypes...) {
+// Delete removes all data related to the entity ID
+func (s *Storage) Delete(id EntityId) {
+	archetypeId := id.ArchetypeId()
+	entityIndex := id.Index()
+
+	archetype, ok := s.archetypes[archetypeId]
+	if !ok {
+		return
+	}
+
+	archetype.Delete(entityIndex)
+}
+
+// GetComponent returns the component for the given entity ID and component type
+func (s *Storage) GetComponent(id EntityId, compType reflect.Type) any {
+	archetypeId := id.ArchetypeId()
+	entityIndex := id.Index()
+
+	archetype, ok := s.archetypes[archetypeId]
+	if !ok {
+		return nil
+	}
+
+	return archetype.GetComponent(entityIndex, compType)
+}
+
+// HasComponent checks if an entity has a specific component type
+func (s *Storage) HasComponent(id EntityId, compType reflect.Type) bool {
+	archetypeId := id.ArchetypeId()
+	archetype, ok := s.archetypes[archetypeId]
+	if !ok {
 		return false
 	}
+	return archetype.HasComponent(compType)
+}
 
-	if e.ExcludedComponentTypes != nil {
-		for _, ctype := range e.ExcludedComponentTypes {
-			if target.HasComponent(ctype) {
-				return false
-			}
+// extractComponentTypes extracts and sorts component types from a slice of components
+func extractComponentTypes(components []any) []reflect.Type {
+	types := make([]reflect.Type, 0, len(components))
+	for _, comp := range components {
+		compType := reflect.TypeOf(comp)
+
+		// If it's a pointer, get the underlying type
+		if compType.Kind() == reflect.Ptr {
+			compType = compType.Elem()
 		}
+
+		// Components can be structs or primitives (int, string, etc.)
+		// But not pointers, maps, channels, or functions (those aren't value types)
+		if compType.Kind() == reflect.Ptr || compType.Kind() == reflect.Map ||
+			compType.Kind() == reflect.Chan || compType.Kind() == reflect.Func {
+			panic("components cannot be pointers, maps, channels, or functions")
+		}
+
+		types = append(types, compType)
+	}
+	sort.Sort(byTypeName(types))
+	return types
+}
+
+// hashTypesToUint32 generates a uint32 hash for a sorted slice of types
+func hashTypesToUint32(types []reflect.Type) uint32 {
+	var h uint32 = 2166136261     // FNV-1a 32-bit offset basis
+	const prime uint32 = 16777619 // FNV-1a 32-bit prime
+
+	for _, t := range types {
+		// Use the type's pointer as a unique identifier
+		ptr := (*iface)(unsafe.Pointer(&t)).data
+		val := uint32(uintptr(ptr))
+
+		// Mix in all 4 bytes if on 64-bit system
+		if unsafe.Sizeof(uintptr(0)) == 8 {
+			val ^= uint32(uintptr(ptr) >> 32)
+		}
+
+		h ^= val
+		h *= prime
 	}
 
-	return true
+	return h
 }
