@@ -18,6 +18,20 @@ func NewStorage() *Storage {
 	}
 }
 
+// GetArchetype returns an archetype storage (if one exists)
+func (s *Storage) GetArchetype(components ...any) *Archetype {
+	types := extractComponentTypes(components)
+	archetypeId := hashTypesToUint32(types)
+	return s.archetypes[archetypeId]
+}
+
+// GetArchetypeByTypes returns an archetype storage (if one exists) based on reflect.Type
+func (s *Storage) GetArchetypeByTypes(types []reflect.Type) *Archetype {
+	sort.Sort(byTypeName(types))
+	archetypeId := hashTypesToUint32(types)
+	return s.archetypes[archetypeId]
+}
+
 // Spawn creates a new entity with the provided components
 func (s *Storage) Spawn(components ...any) EntityId {
 	if len(components) == 0 {
@@ -117,4 +131,12 @@ func hashTypesToUint32(types []reflect.Type) uint32 {
 	}
 
 	return h
+}
+
+type ComponentReader interface {
+	GetComponent(EntityId, reflect.Type) any
+}
+
+func ReadComponent[T any](reader ComponentReader, entityId EntityId) *T {
+	return reader.GetComponent(entityId, reflect.TypeFor[T]()).(*T)
 }

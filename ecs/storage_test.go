@@ -368,3 +368,29 @@ func TestBuiltinPrimitives(t *testing.T) {
 	strComp := storage.GetComponent(id, reflect.TypeOf(string(""))).(*string)
 	assert.Equal(t, "hello", *strComp)
 }
+
+type TestA string
+type TestB string
+
+func TestComponentReader(t *testing.T) {
+	storage := ecs.NewStorage()
+	id := storage.Spawn(TestA("A"), TestB("B"))
+
+	testA := ecs.ReadComponent[TestA](storage, id)
+	assert.Equal(t, *testA, TestA("A"))
+
+	testB := ecs.ReadComponent[TestB](storage, id)
+	assert.Equal(t, *testB, TestB("B"))
+}
+
+func TestGetArchetype(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(TestA("A"), TestB("B"))
+
+	arch1 := storage.GetArchetype(TestA("A"), TestB("B"))
+	arch2 := storage.GetArchetypeByTypes([]reflect.Type{reflect.TypeFor[TestA](), reflect.TypeFor[TestB]()})
+	assert.Equal(t, arch1, arch2)
+
+	assert.Equal(t, *arch1.GetComponent(id.Index(), reflect.TypeFor[TestA]()).(*TestA), TestA("A"))
+}

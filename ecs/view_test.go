@@ -19,9 +19,9 @@ func TestView(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Temperature
-	}]()
+	}](storage)
 
-	item := view.Get(storage, entityId)
+	item := view.Get(entityId)
 	assert.NotNil(t, item)
 	assert.Equal(t, Temperature(32), *item.Temperature)
 	assert.Equal(t, float32(1), item.Position.X)
@@ -40,9 +40,9 @@ func TestViewMultipleComponents(t *testing.T) {
 		*Position
 		*Velocity
 		*Name
-	}]()
+	}](storage)
 
-	item := view.Get(storage, entityId)
+	item := view.Get(entityId)
 	assert.NotNil(t, item)
 	assert.Equal(t, float32(10), item.Position.X)
 	assert.Equal(t, float32(20), item.Position.Y)
@@ -59,10 +59,10 @@ func TestViewMissingComponent(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Should return nil because entity is missing Velocity
-	item := view.Get(storage, entityId)
+	item := view.Get(entityId)
 	assert.Nil(t, item)
 }
 
@@ -73,7 +73,7 @@ func TestViewFill(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Health
-	}]()
+	}](storage)
 
 	var result struct {
 		*Position
@@ -81,7 +81,7 @@ func TestViewFill(t *testing.T) {
 	}
 
 	// Fill should return true and populate the struct
-	ok := view.Fill(storage, entityId, &result)
+	ok := view.Fill(entityId, &result)
 	assert.True(t, ok)
 	assert.NotNil(t, result.Position)
 	assert.NotNil(t, result.Health)
@@ -96,7 +96,7 @@ func TestViewFillMissingComponent(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	var result struct {
 		*Position
@@ -104,7 +104,7 @@ func TestViewFillMissingComponent(t *testing.T) {
 	}
 
 	// Fill should return false because Velocity is missing
-	ok := view.Fill(storage, entityId, &result)
+	ok := view.Fill(entityId, &result)
 	assert.False(t, ok)
 }
 
@@ -115,9 +115,9 @@ func TestViewComponentMutation(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
-	item := view.Get(storage, entityId)
+	item := view.Get(entityId)
 	assert.NotNil(t, item)
 
 	// Mutate the components through the view
@@ -143,9 +143,9 @@ func TestViewWithPrimitiveComponents(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Score
-	}]()
+	}](storage)
 
-	item := view.Get(storage, entityId)
+	item := view.Get(entityId)
 	assert.NotNil(t, item)
 	assert.Equal(t, float32(7), item.Position.X)
 	assert.Equal(t, Score(1000), *item.Score)
@@ -165,9 +165,9 @@ func TestViewInvalidEntityId(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
-	item := view.Get(storage, fakeId)
+	item := view.Get(fakeId)
 	assert.Nil(t, item)
 }
 
@@ -182,20 +182,20 @@ func TestViewMultipleEntities(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Verify each entity can be queried correctly
-	item1 := view.Get(storage, id1)
+	item1 := view.Get(id1)
 	assert.NotNil(t, item1)
 	assert.Equal(t, float32(1), item1.Position.X)
 	assert.Equal(t, float32(0.1), item1.Velocity.DX)
 
-	item2 := view.Get(storage, id2)
+	item2 := view.Get(id2)
 	assert.NotNil(t, item2)
 	assert.Equal(t, float32(2), item2.Position.X)
 	assert.Equal(t, float32(0.2), item2.Velocity.DX)
 
-	item3 := view.Get(storage, id3)
+	item3 := view.Get(id3)
 	assert.NotNil(t, item3)
 	assert.Equal(t, float32(3), item3.Position.X)
 	assert.Equal(t, float32(0.3), item3.Velocity.DX)
@@ -216,9 +216,9 @@ func TestViewSubset(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
-	item := view.Get(storage, entityId)
+	item := view.Get(entityId)
 	assert.NotNil(t, item)
 	assert.Equal(t, float32(5), item.Position.X)
 	assert.Equal(t, float32(1), item.Velocity.DX)
@@ -238,7 +238,7 @@ func TestViewIter(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Collect all entities from the iterator
 	entities := make(map[ecs.EntityId]struct {
@@ -246,7 +246,7 @@ func TestViewIter(t *testing.T) {
 		*Velocity
 	})
 
-	for id, item := range view.Iter(storage) {
+	for id, item := range view.Iter() {
 		entities[id] = item
 	}
 
@@ -273,10 +273,10 @@ func TestViewIterEmpty(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	count := 0
-	for range view.Iter(storage) {
+	for range view.Iter() {
 		count++
 	}
 
@@ -304,11 +304,11 @@ func TestViewIterMultipleArchetypes(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Collect all entities
 	entities := make(map[ecs.EntityId]bool)
-	for id := range view.Iter(storage) {
+	for id := range view.Iter() {
 		entities[id] = true
 	}
 
@@ -330,11 +330,11 @@ func TestViewIterValues(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Collect X values
 	xValues := make([]float32, 0)
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		xValues = append(xValues, item.Position.X)
 	}
 
@@ -354,10 +354,10 @@ func TestViewIterMutation(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Mutate all entities through the iterator
-	for _, item := range view.Iter(storage) {
+	for _, item := range view.Iter() {
 		item.Velocity.DX = item.Position.X * 10
 		item.Velocity.DY = item.Position.Y * 10
 	}
@@ -388,11 +388,11 @@ func TestViewIterEarlyBreak(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Break after processing 2 entities
 	count := 0
-	for range view.Iter(storage) {
+	for range view.Iter() {
 		count++
 		if count == 2 {
 			break
@@ -416,11 +416,11 @@ func TestViewIterWithDeletedEntities(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Collect all entities
 	entities := make(map[ecs.EntityId]bool)
-	for id := range view.Iter(storage) {
+	for id := range view.Iter() {
 		entities[id] = true
 	}
 
@@ -448,12 +448,12 @@ func TestViewIterLargeDataset(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Count and verify
 	count := 0
 	sum := float32(0)
-	for _, item := range view.Iter(storage) {
+	for _, item := range view.Iter() {
 		count++
 		sum += item.Position.X
 	}
@@ -473,10 +473,10 @@ func TestViewIterWithPrimitives(t *testing.T) {
 	view := ecs.NewView[struct {
 		*Position
 		*Score
-	}]()
+	}](storage)
 
 	totalScore := Score(0)
-	for _, item := range view.Iter(storage) {
+	for _, item := range view.Iter() {
 		totalScore += *item.Score
 	}
 
@@ -503,17 +503,17 @@ func ExampleView() {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Query a specific entity
-	if item := view.Get(storage, player); item != nil {
+	if item := view.Get(player); item != nil {
 		fmt.Printf("Player at (%.0f, %.0f) moving at (%.1f, %.1f)\n",
 			item.Position.X, item.Position.Y,
 			item.Velocity.DX, item.Velocity.DY)
 	}
 
 	// Query another entity
-	if item := view.Get(storage, enemy); item != nil {
+	if item := view.Get(enemy); item != nil {
 		fmt.Printf("Enemy at (%.0f, %.0f) moving at (%.1f, %.1f)\n",
 			item.Position.X, item.Position.Y,
 			item.Velocity.DX, item.Velocity.DY)
@@ -540,12 +540,12 @@ func ExampleView_Iter() {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	fmt.Println("Moving entities:")
 	// Iterate over all entities with Position and Velocity
 	count := 0
-	for _, item := range view.Iter(storage) {
+	for _, item := range view.Iter() {
 		count++
 		fmt.Printf("Entity %d: position (%.0f, %.0f), velocity (%.0f, %.0f)\n",
 			count, item.Position.X, item.Position.Y,
@@ -572,11 +572,11 @@ func ExampleView_Iter_update() {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Update all entities: apply velocity to position
 	fmt.Println("Applying velocity to position:")
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		oldX, oldY := item.Position.X, item.Position.Y
 		item.Position.X += item.Velocity.DX
 		item.Position.Y += item.Velocity.DY
@@ -611,12 +611,12 @@ func ExampleView_multipleArchetypes() {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// This will match entities from archetypes 1, 2, and 3 (all have Position + Velocity)
 	count := 0
 	positions := make([]float32, 0)
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		count++
 		positions = append(positions, item.Position.X)
 	}
@@ -656,11 +656,11 @@ func ExampleView_filtering() {
 	view := ecs.NewView[struct {
 		*Position
 		*Health
-	}]()
+	}](storage)
 
 	// Find entities with low health (< 50)
 	fmt.Println("Entities with low health:")
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		if item.Health.Current < 50 {
 			fmt.Printf("Position (%.0f, %.0f): health %d/%d\n",
 				item.Position.X, item.Position.Y,
@@ -687,10 +687,10 @@ func TestViewOptionalComponent(t *testing.T) {
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
-	}]()
+	}](storage)
 
 	// Get entity with both components
-	item1 := view.Get(storage, id1)
+	item1 := view.Get(id1)
 	assert.NotNil(t, item1)
 	assert.NotNil(t, item1.Position)
 	assert.NotNil(t, item1.Velocity)
@@ -698,7 +698,7 @@ func TestViewOptionalComponent(t *testing.T) {
 	assert.Equal(t, float32(0.1), item1.Velocity.DX)
 
 	// Get entity with only required component
-	item2 := view.Get(storage, id2)
+	item2 := view.Get(id2)
 	assert.NotNil(t, item2)
 	assert.NotNil(t, item2.Position)
 	assert.Nil(t, item2.Velocity) // Optional component is nil
@@ -722,12 +722,12 @@ func TestViewOptionalIterMixedArchetypes(t *testing.T) {
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
-	}]()
+	}](storage)
 
 	entities := make(map[ecs.EntityId]bool)
 	velocityCount := 0
 
-	for id, item := range view.Iter(storage) {
+	for id, item := range view.Iter() {
 		entities[id] = true
 		assert.NotNil(t, item.Position)
 
@@ -764,10 +764,10 @@ func TestViewMultipleOptionalComponents(t *testing.T) {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
 		Health   *Health   `ecs:"optional"`
-	}]()
+	}](storage)
 
 	count := 0
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		count++
 		assert.NotNil(t, item.Position)
 		// Velocity and Health may or may not be present
@@ -785,10 +785,10 @@ func TestViewOptionalMutation(t *testing.T) {
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
-	}]()
+	}](storage)
 
 	// Mutate through iterator
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		if item.Velocity != nil {
 			item.Velocity.DX *= 2
 			item.Velocity.DY *= 2
@@ -816,10 +816,10 @@ func TestViewAllOptional(t *testing.T) {
 	view := ecs.NewView[struct {
 		Velocity *Velocity `ecs:"optional"`
 		Health   *Health   `ecs:"optional"`
-	}]()
+	}](storage)
 
 	count := 0
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		count++
 		// At least one should be present (otherwise entity wouldn't exist)
 		assert.True(t, item.Velocity != nil || item.Health != nil)
@@ -837,14 +837,14 @@ func TestViewFillWithOptional(t *testing.T) {
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
-	}]()
+	}](storage)
 
 	var result1 struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
 	}
 
-	ok := view.Fill(storage, id1, &result1)
+	ok := view.Fill(id1, &result1)
 	assert.True(t, ok)
 	assert.NotNil(t, result1.Position)
 	assert.NotNil(t, result1.Velocity)
@@ -854,7 +854,7 @@ func TestViewFillWithOptional(t *testing.T) {
 		Velocity *Velocity `ecs:"optional"`
 	}
 
-	ok = view.Fill(storage, id2, &result2)
+	ok = view.Fill(id2, &result2)
 	assert.True(t, ok)
 	assert.NotNil(t, result2.Position)
 	assert.Nil(t, result2.Velocity)
@@ -871,17 +871,17 @@ func TestViewEmbeddedAndOptionalMixed(t *testing.T) {
 		*Position           // embedded: always required
 		Velocity  *Velocity `ecs:"optional"` // named: optional
 		*Health             // embedded: always required
-	}]()
+	}](storage)
 
 	// id1 has all components
-	item1 := view.Get(storage, id1)
+	item1 := view.Get(id1)
 	assert.NotNil(t, item1)
 	assert.NotNil(t, item1.Position)
 	assert.NotNil(t, item1.Velocity)
 	assert.NotNil(t, item1.Health)
 
 	// id2 missing Velocity (optional), should still match
-	item2 := view.Get(storage, id2)
+	item2 := view.Get(id2)
 	assert.NotNil(t, item2)
 	assert.NotNil(t, item2.Position)
 	assert.Nil(t, item2.Velocity)
@@ -895,11 +895,13 @@ func TestViewInvalidTag(t *testing.T) {
 		assert.Contains(t, r.(string), "invalid ecs tag value")
 	}()
 
+	storage := ecs.NewStorage()
+
 	// This should panic due to invalid tag
 	_ = ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"invalid"`
-	}]()
+	}](storage)
 }
 
 func TestViewOptionalWithDeletedEntities(t *testing.T) {
@@ -915,10 +917,10 @@ func TestViewOptionalWithDeletedEntities(t *testing.T) {
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
-	}]()
+	}](storage)
 
 	entities := make(map[ecs.EntityId]bool)
-	for id := range view.Iter(storage) {
+	for id := range view.Iter() {
 		entities[id] = true
 	}
 
@@ -941,10 +943,10 @@ func TestViewOptionalDoesNotAffectRequiredMatching(t *testing.T) {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
 		Health   *Health   // required
-	}]()
+	}](storage)
 
 	entities := make(map[ecs.EntityId]bool)
-	for id := range view.Iter(storage) {
+	for id := range view.Iter() {
 		entities[id] = true
 	}
 
@@ -952,6 +954,358 @@ func TestViewOptionalDoesNotAffectRequiredMatching(t *testing.T) {
 	assert.Equal(t, 1, len(entities))
 	assert.False(t, entities[id1])
 	assert.True(t, entities[id2])
+}
+
+// Tests for View.Spawn functionality
+
+func TestViewSpawn(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	// Spawn an entity using the view
+	entityId := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 10, Y: 20},
+		Velocity: &Velocity{DX: 1.5, DY: 2.5},
+	})
+
+	// Verify the entity was created correctly
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	assert.Equal(t, float32(10), item.Position.X)
+	assert.Equal(t, float32(20), item.Position.Y)
+	assert.Equal(t, float32(1.5), item.Velocity.DX)
+	assert.Equal(t, float32(2.5), item.Velocity.DY)
+}
+
+func TestViewSpawnMultipleEntities(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	// Spawn multiple entities
+	id1 := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 1, Y: 1},
+		Velocity: &Velocity{DX: 0.1, DY: 0.1},
+	})
+
+	id2 := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 2, Y: 2},
+		Velocity: &Velocity{DX: 0.2, DY: 0.2},
+	})
+
+	id3 := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 3, Y: 3},
+		Velocity: &Velocity{DX: 0.3, DY: 0.3},
+	})
+
+	// Verify all entities exist and are correct
+	item1 := view.Get(id1)
+	assert.NotNil(t, item1)
+	assert.Equal(t, float32(1), item1.Position.X)
+
+	item2 := view.Get(id2)
+	assert.NotNil(t, item2)
+	assert.Equal(t, float32(2), item2.Position.X)
+
+	item3 := view.Get(id3)
+	assert.NotNil(t, item3)
+	assert.Equal(t, float32(3), item3.Position.X)
+}
+
+func TestViewSpawnWithPrimitives(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Score
+	}](storage)
+
+	score := Score(1000)
+	entityId := view.Spawn(struct {
+		*Position
+		*Score
+	}{
+		Position: &Position{X: 5, Y: 10},
+		Score:    &score,
+	})
+
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	assert.Equal(t, float32(5), item.Position.X)
+	assert.Equal(t, Score(1000), *item.Score)
+
+	// Verify mutation works
+	*item.Score = 2000
+	item2 := view.Get(entityId)
+	assert.Equal(t, Score(2000), *item2.Score)
+}
+
+func TestViewSpawnWithOptionalComponentsAllPresent(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}](storage)
+
+	entityId := view.Spawn(struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}{
+		Position: &Position{X: 10, Y: 20},
+		Velocity: &Velocity{DX: 1, DY: 2},
+	})
+
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	assert.NotNil(t, item.Position)
+	assert.NotNil(t, item.Velocity)
+	assert.Equal(t, float32(10), item.Position.X)
+	assert.Equal(t, float32(1), item.Velocity.DX)
+}
+
+func TestViewSpawnWithOptionalComponentsNil(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}](storage)
+
+	// Spawn with optional component set to nil
+	entityId := view.Spawn(struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+	}{
+		Position: &Position{X: 10, Y: 20},
+		Velocity: nil,
+	})
+
+	// The entity should only have Position component
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	assert.NotNil(t, item.Position)
+	assert.Nil(t, item.Velocity)
+	assert.Equal(t, float32(10), item.Position.X)
+}
+
+func TestViewSpawnMixedOptional(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+		Health   *Health   `ecs:"optional"`
+	}](storage)
+
+	// Spawn with only Position and Health
+	entityId := view.Spawn(struct {
+		Position *Position
+		Velocity *Velocity `ecs:"optional"`
+		Health   *Health   `ecs:"optional"`
+	}{
+		Position: &Position{X: 5, Y: 5},
+		Velocity: nil,
+		Health:   &Health{Current: 100, Max: 100},
+	})
+
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	assert.NotNil(t, item.Position)
+	assert.Nil(t, item.Velocity)
+	assert.NotNil(t, item.Health)
+	assert.Equal(t, 100, item.Health.Current)
+}
+
+func TestViewSpawnNilRequiredComponentPanics(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		Position *Position
+		Velocity *Velocity
+	}](storage)
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r)
+		assert.Contains(t, r.(string), "required component is nil")
+	}()
+
+	// This should panic because Velocity is required but nil
+	view.Spawn(struct {
+		Position *Position
+		Velocity *Velocity
+	}{
+		Position: &Position{X: 10, Y: 20},
+		Velocity: nil,
+	})
+}
+
+func TestViewSpawnArchetypeCaching(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	// Spawn first entity (should cache archetype ID)
+	id1 := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 1, Y: 1},
+		Velocity: &Velocity{DX: 0.1, DY: 0.1},
+	})
+
+	// Spawn second entity (should reuse cached archetype ID)
+	id2 := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 2, Y: 2},
+		Velocity: &Velocity{DX: 0.2, DY: 0.2},
+	})
+
+	// Both entities should be in the same archetype
+	assert.Equal(t, id1.ArchetypeId(), id2.ArchetypeId())
+
+	// Verify both entities exist with correct data
+	item1 := view.Get(id1)
+	assert.NotNil(t, item1)
+	assert.Equal(t, float32(1), item1.Position.X)
+
+	item2 := view.Get(id2)
+	assert.NotNil(t, item2)
+	assert.Equal(t, float32(2), item2.Position.X)
+}
+
+func TestViewSpawnCompatibleWithStorageSpawn(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	// Spawn using view
+	viewId := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 1, Y: 1},
+		Velocity: &Velocity{DX: 0.1, DY: 0.1},
+	})
+
+	// Spawn using storage with same components
+	storageId := storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0.2, DY: 0.2})
+
+	// Both should be in the same archetype
+	assert.Equal(t, viewId.ArchetypeId(), storageId.ArchetypeId())
+
+	// Both should be retrievable via the view
+	viewItem := view.Get(viewId)
+	assert.NotNil(t, viewItem)
+	assert.Equal(t, float32(1), viewItem.Position.X)
+
+	storageItem := view.Get(storageId)
+	assert.NotNil(t, storageItem)
+	assert.Equal(t, float32(2), storageItem.Position.X)
+}
+
+func TestViewSpawnManyComponents(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+		*Health
+		*Name
+	}](storage)
+
+	entityId := view.Spawn(struct {
+		*Position
+		*Velocity
+		*Health
+		*Name
+	}{
+		Position: &Position{X: 10, Y: 20},
+		Velocity: &Velocity{DX: 1, DY: 2},
+		Health:   &Health{Current: 80, Max: 100},
+		Name:     &Name{Value: "TestEntity"},
+	})
+
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	assert.Equal(t, float32(10), item.Position.X)
+	assert.Equal(t, float32(1), item.Velocity.DX)
+	assert.Equal(t, 80, item.Health.Current)
+	assert.Equal(t, "TestEntity", item.Name.Value)
+}
+
+func TestViewSpawnIterateSpawnedEntities(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	// Spawn multiple entities
+	for i := 0; i < 10; i++ {
+		view.Spawn(struct {
+			*Position
+			*Velocity
+		}{
+			Position: &Position{X: float32(i), Y: float32(i * 2)},
+			Velocity: &Velocity{DX: float32(i) * 0.1, DY: float32(i) * 0.2},
+		})
+	}
+
+	// Iterate and verify
+	count := 0
+	for _, item := range view.Iter() {
+		count++
+		assert.NotNil(t, item.Position)
+		assert.NotNil(t, item.Velocity)
+	}
+
+	assert.Equal(t, 10, count)
+}
+
+func TestViewSpawnMutateAfterSpawn(t *testing.T) {
+	storage := ecs.NewStorage()
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	entityId := view.Spawn(struct {
+		*Position
+		*Velocity
+	}{
+		Position: &Position{X: 1, Y: 1},
+		Velocity: &Velocity{DX: 0, DY: 0},
+	})
+
+	// Get and mutate
+	item := view.Get(entityId)
+	assert.NotNil(t, item)
+	item.Position.X = 100
+	item.Velocity.DX = 50
+
+	// Verify mutations persisted
+	item2 := view.Get(entityId)
+	assert.Equal(t, float32(100), item2.Position.X)
+	assert.Equal(t, float32(50), item2.Velocity.DX)
 }
 
 // ExampleView_optional demonstrates using optional components in views
@@ -970,7 +1324,7 @@ func ExampleView_optional() {
 		Position *Position
 		Velocity *Velocity
 		Health   *Health `ecs:"optional"` // Health component is optional
-	}]()
+	}](storage)
 
 	fmt.Println("All moving entities:")
 
@@ -980,7 +1334,7 @@ func ExampleView_optional() {
 		health *Health
 	}
 	entities := make([]entityInfo, 0)
-	for item := range view.IterValues(storage) {
+	for item := range view.IterValues() {
 		entities = append(entities, entityInfo{item.Position.X, item.Position.Y, item.Health})
 	}
 

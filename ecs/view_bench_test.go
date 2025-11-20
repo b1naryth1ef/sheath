@@ -9,12 +9,14 @@ import (
 
 // BenchmarkViewCreation tests the cost of creating a view
 func BenchmarkViewCreation(b *testing.B) {
+	storage := ecs.NewStorage()
+
 	b.Run("TwoComponents", func(b *testing.B) {
 		for range b.N {
 			_ = ecs.NewView[struct {
 				*Position
 				*Velocity
-			}]()
+			}](storage)
 		}
 	})
 
@@ -25,7 +27,7 @@ func BenchmarkViewCreation(b *testing.B) {
 				*Velocity
 				*Health
 				*Name
-			}]()
+			}](storage)
 		}
 	})
 }
@@ -36,7 +38,7 @@ func BenchmarkViewGet(b *testing.B) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Pre-populate with entities
 	ids := make([]ecs.EntityId, 10000)
@@ -50,7 +52,7 @@ func BenchmarkViewGet(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		idx := rand.IntN(len(ids))
-		item := view.Get(storage, ids[idx])
+		item := view.Get(ids[idx])
 		if item == nil {
 			b.Fatal("item is nil")
 		}
@@ -63,7 +65,7 @@ func BenchmarkViewFill(b *testing.B) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	// Pre-populate with entities
 	ids := make([]ecs.EntityId, 10000)
@@ -82,7 +84,7 @@ func BenchmarkViewFill(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		idx := rand.IntN(len(ids))
-		if !view.Fill(storage, ids[idx], &result) {
+		if !view.Fill(ids[idx], &result) {
 			b.Fatal("fill failed")
 		}
 	}
@@ -102,12 +104,12 @@ func BenchmarkViewIter(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 100 {
@@ -128,12 +130,12 @@ func BenchmarkViewIter(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 1000 {
@@ -154,12 +156,12 @@ func BenchmarkViewIter(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 10000 {
@@ -180,12 +182,12 @@ func BenchmarkViewIter(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 100000 {
@@ -208,12 +210,12 @@ func BenchmarkViewIterValues(b *testing.B) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	b.ResetTimer()
 	for range b.N {
 		count := 0
-		for range view.IterValues(storage) {
+		for range view.IterValues() {
 			count++
 		}
 		if count != 10000 {
@@ -235,11 +237,11 @@ func BenchmarkViewIterWithMutation(b *testing.B) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	b.ResetTimer()
 	for range b.N {
-		for _, item := range view.Iter(storage) {
+		for _, item := range view.Iter() {
 			item.Position.X += item.Velocity.DX
 			item.Position.Y += item.Velocity.DY
 		}
@@ -271,12 +273,12 @@ func BenchmarkViewIterMultipleArchetypes(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 10000 {
@@ -328,12 +330,12 @@ func BenchmarkViewIterMultipleArchetypes(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 10000 {
@@ -388,12 +390,12 @@ func BenchmarkViewIterMultipleArchetypes(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 			if count != 10000 {
@@ -418,12 +420,12 @@ func BenchmarkViewIterWithFilter(b *testing.B) {
 		*Position
 		*Velocity
 		*Health
-	}]()
+	}](storage)
 
 	b.ResetTimer()
 	for range b.N {
 		count := 0
-		for _, item := range view.Iter(storage) {
+		for _, item := range view.Iter() {
 			// Filter: only process entities with low health
 			if item.Health.Current < 50 {
 				item.Position.X += item.Velocity.DX * 2 // Move faster when injured
@@ -455,12 +457,12 @@ func BenchmarkViewIterSparseEntities(b *testing.B) {
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
-	}]()
+	}](storage)
 
 	b.ResetTimer()
 	for range b.N {
 		count := 0
-		for range view.Iter(storage) {
+		for range view.Iter() {
 			count++
 		}
 		if count != 5000 {
@@ -487,11 +489,11 @@ func BenchmarkViewIterComplex(b *testing.B) {
 		*Velocity
 		*Health
 		*Name
-	}]()
+	}](storage)
 
 	b.ResetTimer()
 	for range b.N {
-		for _, item := range view.Iter(storage) {
+		for _, item := range view.Iter() {
 			item.Position.X += item.Velocity.DX
 			item.Position.Y += item.Velocity.DY
 			if item.Position.X > 100 {
@@ -516,11 +518,11 @@ func BenchmarkViewVsDirectAccess(b *testing.B) {
 		view := ecs.NewView[struct {
 			*Position
 			*Velocity
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
-			for _, item := range view.Iter(storage) {
+			for _, item := range view.Iter() {
 				item.Position.X += item.Velocity.DX
 				item.Position.Y += item.Velocity.DY
 			}
@@ -544,11 +546,11 @@ func BenchmarkViewOptionalComponent(b *testing.B) {
 		view := ecs.NewView[struct {
 			Position *Position
 			Velocity *Velocity `ecs:"optional"`
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
-			for item := range view.IterValues(storage) {
+			for item := range view.IterValues() {
 				if item.Velocity != nil {
 					item.Position.X += item.Velocity.DX
 				}
@@ -570,11 +572,11 @@ func BenchmarkViewOptionalComponent(b *testing.B) {
 		view := ecs.NewView[struct {
 			Position *Position
 			Velocity *Velocity `ecs:"optional"`
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
-			for item := range view.IterValues(storage) {
+			for item := range view.IterValues() {
 				if item.Velocity != nil {
 					item.Position.X += item.Velocity.DX
 				}
@@ -596,11 +598,11 @@ func BenchmarkViewOptionalComponent(b *testing.B) {
 		view := ecs.NewView[struct {
 			Position *Position
 			Velocity *Velocity `ecs:"optional"`
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
-			for item := range view.IterValues(storage) {
+			for item := range view.IterValues() {
 				if item.Velocity != nil {
 					item.Position.X += item.Velocity.DX
 				}
@@ -629,11 +631,11 @@ func BenchmarkViewOptionalComponent(b *testing.B) {
 			Position *Position
 			Velocity *Velocity `ecs:"optional"`
 			Health   *Health   `ecs:"optional"`
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
-			for item := range view.IterValues(storage) {
+			for item := range view.IterValues() {
 				if item.Velocity != nil {
 					item.Position.X += item.Velocity.DX
 				}
@@ -662,12 +664,12 @@ func BenchmarkViewOptionalVsRequired(b *testing.B) {
 			Position *Position
 			Velocity *Velocity
 			Health   *Health
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 		}
@@ -688,12 +690,12 @@ func BenchmarkViewOptionalVsRequired(b *testing.B) {
 			Position *Position
 			Velocity *Velocity `ecs:"optional"`
 			Health   *Health   `ecs:"optional"`
-		}]()
+		}](storage)
 
 		b.ResetTimer()
 		for range b.N {
 			count := 0
-			for range view.Iter(storage) {
+			for range view.Iter() {
 				count++
 			}
 		}
