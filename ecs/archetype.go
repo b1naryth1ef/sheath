@@ -130,3 +130,19 @@ func (a *Archetype) Compact() {
 		}
 	}
 }
+
+// Iter returns an iterator over all valid EntityIds in this archetype
+func (a *Archetype) Iter() func(yield func(EntityId) bool) {
+	return func(yield func(EntityId) bool) {
+		if len(a.storages) == 0 {
+			return
+		}
+
+		for index := range a.storages[0].Iter() {
+			entityId := NewEntityId(a.id, uint32(index))
+			if !yield(entityId) {
+				return
+			}
+		}
+	}
+}

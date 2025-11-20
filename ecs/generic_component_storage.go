@@ -37,7 +37,7 @@ func (r *ComponentRegistry) getFactory(t reflect.Type) func() iComponentStorage 
 }
 
 const (
-	genericBlockSize = 256
+	genericBlockSize = 64
 )
 
 // genericComponentStorage is a generic implementation of iComponentStorage.
