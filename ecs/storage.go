@@ -118,6 +118,111 @@ func (s *Storage) Delete(id EntityId) {
 	archetype.Delete(entityIndex)
 }
 
+func (s *Storage) AddComponent(id EntityId, component any) {
+	oldArchetype, ok := s.archetypes[id.ArchetypeId()]
+	if !ok {
+		return
+	}
+
+	compType := reflect.TypeOf(component)
+	if compType.Kind() == reflect.Ptr {
+		compType = compType.Elem()
+	}
+
+	if oldArchetype.HasComponent(compType) {
+		return
+	}
+
+	newTypes := make([]reflect.Type, 0, len(oldArchetype.types)+1)
+	newTypes = append(newTypes, oldArchetype.types...)
+	newTypes = append(newTypes, compType)
+	sort.Sort(byTypeName(newTypes))
+
+	newArchetypeId := hashTypesToUint32(newTypes)
+	newArchetype, exists := s.archetypes[newArchetypeId]
+	if !exists {
+		newArchetype = NewArchetype(newArchetypeId, newTypes)
+		s.archetypes[newArchetypeId] = newArchetype
+	}
+
+	ref, hasRef := oldArchetype.refs.Get(id)
+
+	components := make([]any, 0, len(newTypes))
+	for _, typ := range newTypes {
+		if typ == compType {
+			components = append(components, component)
+		} else {
+			comp := oldArchetype.GetComponent(id.Index(), typ)
+			components = append(components, comp)
+		}
+	}
+
+	newIndex := newArchetype.Spawn(components)
+	newId := NewEntityId(newArchetypeId, newIndex)
+
+	if hasRef {
+		oldArchetype.refs.Del(id)
+		ref.current = newId
+		newArchetype.refs.Put(newId, ref)
+	}
+
+	oldArchetype.Delete(id.Index())
+}
+
+func (s *Storage) RemoveComponent(id EntityId, compType reflect.Type) {
+	oldArchetype, ok := s.archetypes[id.ArchetypeId()]
+	if !ok {
+		return
+	}
+
+	if !oldArchetype.HasComponent(compType) {
+		return
+	}
+
+	newTypes := make([]reflect.Type, 0, len(oldArchetype.types)-1)
+	for _, typ := range oldArchetype.types {
+		if typ != compType {
+			newTypes = append(newTypes, typ)
+		}
+	}
+
+	ref, hasRef := oldArchetype.refs.Get(id)
+
+	if len(newTypes) == 0 {
+		if hasRef {
+			oldArchetype.refs.Del(id)
+			ref.deleted = true
+			s.refs.Del(ref.ref)
+		}
+		oldArchetype.Delete(id.Index())
+		return
+	}
+
+	newArchetypeId := hashTypesToUint32(newTypes)
+	newArchetype, exists := s.archetypes[newArchetypeId]
+	if !exists {
+		newArchetype = NewArchetype(newArchetypeId, newTypes)
+		s.archetypes[newArchetypeId] = newArchetype
+	}
+
+	components := make([]any, 0, len(newTypes))
+	for _, typ := range newTypes {
+		comp := oldArchetype.GetComponent(id.Index(), typ)
+		components = append(components, comp)
+	}
+
+	newIndex := newArchetype.Spawn(components)
+	newId := NewEntityId(newArchetypeId, newIndex)
+
+	if hasRef {
+		oldArchetype.refs.Del(id)
+		ref.current = newId
+		newArchetype.refs.Put(newId, ref)
+	}
+
+	oldArchetype.Delete(id.Index())
+}
+
 // GetComponent returns the component for the given entity ID and component type
 func (s *Storage) GetComponent(id EntityId, compType reflect.Type) any {
 	archetypeId := id.ArchetypeId()

@@ -240,24 +240,16 @@ func (v *View[T]) IterValues() iter.Seq[T] {
 }
 
 // Spawn creates a new entity with components extracted from the view struct
-// Only non-optional components are spawned (optional components that are nil are skipped)
-// This is a high-performance method that uses cached archetype IDs
 func (v *View[T]) Spawn(data T) EntityId {
-	// Extract component data from the view struct using unsafe pointer access
 	structPtr := unsafe.Pointer(&data)
 
-	// Collect all non-nil components
 	components := make([]any, 0, len(v.types))
 	componentTypes := make([]reflect.Type, 0, len(v.types))
-
 	for i := 0; i < len(v.types); i++ {
-		// Calculate the address of the field using the pre-computed offset
 		fieldPtr := unsafe.Pointer(uintptr(structPtr) + v.fieldOffset[i])
 
-		// Get the pointer value from the field
 		componentPtr := *(*unsafe.Pointer)(fieldPtr)
 
-		// Skip nil pointers (optional components that aren't present)
 		if componentPtr == nil {
 			if !v.optional[i] {
 				panic("required component is nil in View.Spawn")
@@ -265,11 +257,8 @@ func (v *View[T]) Spawn(data T) EntityId {
 			continue
 		}
 
-		// Create an interface{} from the component pointer
-		// We need to reconstruct the interface with the correct type information
 		componentType := v.types[i]
 		component := reflect.NewAt(componentType, componentPtr).Elem().Interface()
-
 		components = append(components, component)
 		componentTypes = append(componentTypes, componentType)
 	}
@@ -278,15 +267,12 @@ func (v *View[T]) Spawn(data T) EntityId {
 		panic("cannot spawn entity without components")
 	}
 
-	// Sort component types for consistent archetype matching
-	// We need to sort the types and reorder components accordingly
 	sortedIndices := make([]int, len(componentTypes))
 	for i := range sortedIndices {
 		sortedIndices[i] = i
 	}
 
-	// Sort indices based on type names
-	for i := 0; i < len(sortedIndices); i++ {
+	for i := range sortedIndices {
 		for j := i + 1; j < len(sortedIndices); j++ {
 			if componentTypes[sortedIndices[i]].String() > componentTypes[sortedIndices[j]].String() {
 				sortedIndices[i], sortedIndices[j] = sortedIndices[j], sortedIndices[i]
@@ -294,7 +280,6 @@ func (v *View[T]) Spawn(data T) EntityId {
 		}
 	}
 
-	// Reorder components and types
 	sortedComponents := make([]any, len(components))
 	sortedTypes := make([]reflect.Type, len(componentTypes))
 	for i, idx := range sortedIndices {
@@ -302,30 +287,22 @@ func (v *View[T]) Spawn(data T) EntityId {
 		sortedTypes[i] = componentTypes[idx]
 	}
 
-	// Compute archetype ID
-	// For performance, we can cache this if all required components are present
 	var archetypeId uint32
 	if v.cachedArchetypeId != nil && len(sortedTypes) == len(v.requiredTypes()) {
-		// All required components present, use cached archetype ID
 		archetypeId = *v.cachedArchetypeId
 	} else {
-		// Need to compute archetype ID for this specific set of components
 		archetypeId = hashTypesToUint32(sortedTypes)
-
-		// Cache it if this represents all required components
 		if len(sortedTypes) == len(v.requiredTypes()) {
 			v.cachedArchetypeId = &archetypeId
 		}
 	}
 
-	// Get or create archetype
 	archetype, exists := v.storage.archetypes[archetypeId]
 	if !exists {
 		archetype = NewArchetype(archetypeId, sortedTypes)
 		v.storage.archetypes[archetypeId] = archetype
 	}
 
-	// Spawn the entity in the archetype
 	entityIndex := archetype.Spawn(sortedComponents)
 	return NewEntityId(archetypeId, entityIndex)
 }

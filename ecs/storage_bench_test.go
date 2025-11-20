@@ -291,6 +291,100 @@ func BenchmarkArchetypeLookup(b *testing.B) {
 	}
 }
 
+func BenchmarkEntityRefCreate(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	ids := make([]ecs.EntityId, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		idx := rand.IntN(len(ids))
+		storage.CreateEntityRef(ids[idx])
+	}
+}
+
+func BenchmarkEntityRefResolve(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	ids := make([]ecs.EntityId, 10000)
+	refs := make([]ecs.EntityRef, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		refs[i] = storage.CreateEntityRef(ids[i])
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		idx := rand.IntN(len(refs))
+		storage.ResolveEntityRef(refs[idx])
+	}
+}
+
+func BenchmarkAddComponent(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	ids := make([]ecs.EntityId, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		storage.CreateEntityRef(ids[i])
+	}
+
+	b.ResetTimer()
+	for i := range b.N {
+		if i >= len(ids) {
+			break
+		}
+		storage.AddComponent(ids[i], &Velocity{DX: 1.0, DY: 1.0})
+	}
+}
+
+func BenchmarkRemoveComponent(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	ids := make([]ecs.EntityId, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: 1.0, DY: 1.0})
+		storage.CreateEntityRef(ids[i])
+	}
+
+	b.ResetTimer()
+	for i := range b.N {
+		if i >= len(ids) {
+			break
+		}
+		storage.RemoveComponent(ids[i], reflect.TypeOf(Velocity{}))
+	}
+}
+
+func BenchmarkAddRemoveComponent(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	ids := make([]ecs.EntityId, 1000)
+	refs := make([]ecs.EntityRef, 1000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)})
+		refs[i] = storage.CreateEntityRef(ids[i])
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		idx := rand.IntN(len(refs))
+		id, ok := storage.ResolveEntityRef(refs[idx])
+		if !ok {
+			continue
+		}
+
+		if storage.HasComponent(id, reflect.TypeOf(Velocity{})) {
+			storage.RemoveComponent(id, reflect.TypeOf(Velocity{}))
+		} else {
+			storage.AddComponent(id, &Velocity{DX: 1.0, DY: 1.0})
+		}
+	}
+}
+
 // Example showing basic usage
 func ExampleStorage() {
 	storage := ecs.NewStorage()

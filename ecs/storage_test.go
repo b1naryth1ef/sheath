@@ -394,3 +394,130 @@ func TestGetArchetype(t *testing.T) {
 
 	assert.Equal(t, *arch1.GetComponent(id.Index(), reflect.TypeFor[TestA]()).(*TestA), TestA("A"))
 }
+
+func TestAddComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
+	ref := storage.CreateEntityRef(id)
+
+	assert.True(t, storage.HasComponent(id, reflect.TypeOf(Position{})))
+	assert.False(t, storage.HasComponent(id, reflect.TypeOf(Velocity{})))
+
+	storage.AddComponent(id, &Velocity{DX: 0.5, DY: 0.5})
+
+	newId, ok := storage.ResolveEntityRef(ref)
+	assert.True(t, ok)
+
+	assert.True(t, storage.HasComponent(newId, reflect.TypeOf(Position{})))
+	assert.True(t, storage.HasComponent(newId, reflect.TypeOf(Velocity{})))
+
+	pos := storage.GetComponent(newId, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(1.0), pos.X)
+	assert.Equal(t, float32(2.0), pos.Y)
+
+	vel := storage.GetComponent(newId, reflect.TypeOf(Velocity{})).(*Velocity)
+	assert.Equal(t, float32(0.5), vel.DX)
+	assert.Equal(t, float32(0.5), vel.DY)
+}
+
+func TestAddComponentWithEntityRef(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 10.0, Y: 20.0})
+	ref := storage.CreateEntityRef(id)
+
+	storage.AddComponent(id, &Velocity{DX: 1.0, DY: 2.0})
+
+	resolvedId, ok := storage.ResolveEntityRef(ref)
+	assert.True(t, ok)
+
+	pos := storage.GetComponent(resolvedId, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(10.0), pos.X)
+
+	vel := storage.GetComponent(resolvedId, reflect.TypeOf(Velocity{})).(*Velocity)
+	assert.Equal(t, float32(1.0), vel.DX)
+}
+
+func TestAddComponentAlreadyExists(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
+	oldArchetypeId := id.ArchetypeId()
+
+	storage.AddComponent(id, &Position{X: 99.0, Y: 99.0})
+
+	assert.Equal(t, oldArchetypeId, id.ArchetypeId())
+
+	pos := storage.GetComponent(id, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(1.0), pos.X)
+}
+
+func TestRemoveComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 1.0, Y: 2.0}, &Velocity{DX: 0.5, DY: 0.5})
+	ref := storage.CreateEntityRef(id)
+
+	assert.True(t, storage.HasComponent(id, reflect.TypeOf(Position{})))
+	assert.True(t, storage.HasComponent(id, reflect.TypeOf(Velocity{})))
+
+	storage.RemoveComponent(id, reflect.TypeOf(Velocity{}))
+
+	newId, ok := storage.ResolveEntityRef(ref)
+	assert.True(t, ok)
+
+	assert.True(t, storage.HasComponent(newId, reflect.TypeOf(Position{})))
+	assert.False(t, storage.HasComponent(newId, reflect.TypeOf(Velocity{})))
+
+	pos := storage.GetComponent(newId, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(1.0), pos.X)
+	assert.Equal(t, float32(2.0), pos.Y)
+}
+
+func TestRemoveComponentWithEntityRef(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 5.0, Y: 10.0}, &Velocity{DX: 1.0, DY: 1.0}, &Name{Value: "test"})
+	ref := storage.CreateEntityRef(id)
+
+	storage.RemoveComponent(id, reflect.TypeOf(Velocity{}))
+
+	resolvedId, ok := storage.ResolveEntityRef(ref)
+	assert.True(t, ok)
+
+	pos := storage.GetComponent(resolvedId, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(5.0), pos.X)
+
+	name := storage.GetComponent(resolvedId, reflect.TypeOf(Name{})).(*Name)
+	assert.Equal(t, "test", name.Value)
+
+	vel := storage.GetComponent(resolvedId, reflect.TypeOf(Velocity{}))
+	assert.Nil(t, vel)
+}
+
+func TestRemoveLastComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
+	ref := storage.CreateEntityRef(id)
+
+	storage.RemoveComponent(id, reflect.TypeOf(Position{}))
+
+	_, ok := storage.ResolveEntityRef(ref)
+	assert.False(t, ok)
+
+	comp := storage.GetComponent(id, reflect.TypeOf(Position{}))
+	assert.Nil(t, comp)
+}
+
+func TestRemoveComponentNotExists(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
+
+	storage.RemoveComponent(id, reflect.TypeOf(Velocity{}))
+
+	pos := storage.GetComponent(id, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(1.0), pos.X)
+}
