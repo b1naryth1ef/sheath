@@ -9,8 +9,8 @@ import (
 )
 
 func TestEntityRefBasicLifecycle(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
 	ref := storage.CreateEntityRef(id)
@@ -31,8 +31,8 @@ func TestEntityRefBasicLifecycle(t *testing.T) {
 }
 
 func TestEntityRefStability(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1.0, Y: 1.0})
 	id2 := storage.Spawn(&Position{X: 2.0, Y: 2.0})
@@ -57,8 +57,8 @@ func TestEntityRefStability(t *testing.T) {
 }
 
 func TestEntityRefIdempotency(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 5.0, Y: 10.0})
 
@@ -69,8 +69,8 @@ func TestEntityRefIdempotency(t *testing.T) {
 }
 
 func TestEntityRefMultipleInvalidations(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 1.0})
 	ref := storage.CreateEntityRef(id)
@@ -86,7 +86,7 @@ func TestEntityRefMultipleInvalidations(t *testing.T) {
 }
 
 func TestEntityRefInvalidBeforeCreate(t *testing.T) {
-	storage := ecs.NewStorage()
+	storage := ecs.NewStorage(newTestRegistry())
 
 	_, ok := storage.ResolveEntityRef(ecs.EntityRef(9999))
 	assert.False(t, ok)

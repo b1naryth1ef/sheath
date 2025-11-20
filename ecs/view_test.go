@@ -10,8 +10,8 @@ import (
 )
 
 func TestView(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	entityId := storage.Spawn(&Position{
 		X: 1,
 		Y: 2,
@@ -30,8 +30,8 @@ func TestView(t *testing.T) {
 }
 
 func TestViewMultipleComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	entityId := storage.Spawn(
 		&Position{X: 10, Y: 20},
 		&Velocity{DX: 1.5, DY: 2.5},
@@ -54,8 +54,8 @@ func TestViewMultipleComponents(t *testing.T) {
 }
 
 func TestViewMissingComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	// Entity only has Position, not Velocity
 	entityId := storage.Spawn(&Position{X: 5, Y: 10})
 
@@ -70,8 +70,8 @@ func TestViewMissingComponent(t *testing.T) {
 }
 
 func TestViewFill(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	entityId := storage.Spawn(&Position{X: 3, Y: 4}, &Health{Current: 50, Max: 100})
 
 	view := ecs.NewView[struct {
@@ -94,8 +94,8 @@ func TestViewFill(t *testing.T) {
 }
 
 func TestViewFillMissingComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	entityId := storage.Spawn(&Position{X: 1, Y: 2})
 
 	view := ecs.NewView[struct {
@@ -114,8 +114,8 @@ func TestViewFillMissingComponent(t *testing.T) {
 }
 
 func TestViewComponentMutation(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	entityId := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0, DY: 0})
 
 	view := ecs.NewView[struct {
@@ -143,8 +143,8 @@ func TestViewComponentMutation(t *testing.T) {
 }
 
 func TestViewWithPrimitiveComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	entityId := storage.Spawn(&Position{X: 7, Y: 8}, Score(1000))
 
 	view := ecs.NewView[struct {
@@ -166,8 +166,8 @@ func TestViewWithPrimitiveComponents(t *testing.T) {
 }
 
 func TestViewInvalidEntityId(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	fakeId := ecs.NewEntityId(9999, 9999)
 
 	view := ecs.NewView[struct {
@@ -180,8 +180,8 @@ func TestViewInvalidEntityId(t *testing.T) {
 }
 
 func TestViewMultipleEntities(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Create multiple entities with same components
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
@@ -211,8 +211,8 @@ func TestViewMultipleEntities(t *testing.T) {
 }
 
 func TestViewSubset(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Entity has more components than the view requires
 	entityId := storage.Spawn(
@@ -235,8 +235,8 @@ func TestViewSubset(t *testing.T) {
 }
 
 func TestViewIter(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn entities with Position and Velocity
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
@@ -279,8 +279,8 @@ func TestViewIter(t *testing.T) {
 }
 
 func TestViewIterEmpty(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	view := ecs.NewView[struct {
 		*Position
@@ -296,8 +296,8 @@ func TestViewIterEmpty(t *testing.T) {
 }
 
 func TestViewIterMultipleArchetypes(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Create entities with different archetype combinations
 	// Archetype 1: Position + Velocity
@@ -334,8 +334,8 @@ func TestViewIterMultipleArchetypes(t *testing.T) {
 }
 
 func TestViewIterValues(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	storage.Spawn(&Position{X: 1, Y: 10}, &Velocity{DX: 0.1, DY: 1.0})
 	storage.Spawn(&Position{X: 2, Y: 20}, &Velocity{DX: 0.2, DY: 2.0})
@@ -359,8 +359,8 @@ func TestViewIterValues(t *testing.T) {
 }
 
 func TestViewIterMutation(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0, DY: 0})
 	id2 := storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0, DY: 0})
@@ -392,8 +392,8 @@ func TestViewIterMutation(t *testing.T) {
 }
 
 func TestViewIterEarlyBreak(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
 	storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0.2, DY: 0.2})
@@ -419,8 +419,8 @@ func TestViewIterEarlyBreak(t *testing.T) {
 }
 
 func TestViewIterWithDeletedEntities(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
 	id2 := storage.Spawn(&Position{X: 2, Y: 2}, &Velocity{DX: 0.2, DY: 0.2})
@@ -450,8 +450,8 @@ func TestViewIterWithDeletedEntities(t *testing.T) {
 }
 
 func TestViewIterLargeDataset(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	const numEntities = 1000
 
@@ -482,8 +482,8 @@ func TestViewIterLargeDataset(t *testing.T) {
 }
 
 func TestViewIterWithPrimitives(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	storage.Spawn(&Position{X: 1, Y: 1}, Score(100))
 	storage.Spawn(&Position{X: 2, Y: 2}, Score(200))
@@ -504,8 +504,8 @@ func TestViewIterWithPrimitives(t *testing.T) {
 
 // ExampleView demonstrates basic view usage for querying single entities
 func ExampleView() {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn entities with different component combinations
 	player := storage.Spawn(
@@ -546,8 +546,8 @@ func ExampleView() {
 
 // ExampleView_Iter demonstrates iterating over all entities matching a view
 func ExampleView_Iter() {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn multiple entities
 	storage.Spawn(&Position{X: 0, Y: 0}, &Velocity{DX: 1, DY: 0})
@@ -582,8 +582,8 @@ func ExampleView_Iter() {
 
 // ExampleView_Iter_update demonstrates updating components during iteration
 func ExampleView_Iter_update() {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn entities
 	storage.Spawn(&Position{X: 0, Y: 0}, &Velocity{DX: 1, DY: 2})
@@ -615,8 +615,8 @@ func ExampleView_Iter_update() {
 
 // ExampleView_multipleArchetypes demonstrates views matching across different archetypes
 func ExampleView_multipleArchetypes() {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Archetype 1: Position + Velocity
 	storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 1, DY: 0})
@@ -667,8 +667,8 @@ func ExampleView_multipleArchetypes() {
 
 // ExampleView_filtering demonstrates filtering entities during iteration
 func ExampleView_filtering() {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn entities with different health values
 	storage.Spawn(&Position{X: 1, Y: 1}, &Health{Current: 25, Max: 100})
@@ -701,8 +701,8 @@ func ExampleView_filtering() {
 // Tests for optional component support
 
 func TestViewOptionalComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Entity with both components
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
@@ -731,8 +731,8 @@ func TestViewOptionalComponent(t *testing.T) {
 }
 
 func TestViewOptionalIterMixedArchetypes(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Archetype 1: Position + Velocity
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
@@ -775,8 +775,8 @@ func TestViewOptionalIterMixedArchetypes(t *testing.T) {
 }
 
 func TestViewMultipleOptionalComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// All components
 	storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1}, &Health{Current: 100, Max: 100})
@@ -804,8 +804,8 @@ func TestViewMultipleOptionalComponents(t *testing.T) {
 }
 
 func TestViewOptionalMutation(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 1, DY: 1})
 	id2 := storage.Spawn(&Position{X: 2, Y: 2})
@@ -834,8 +834,8 @@ func TestViewOptionalMutation(t *testing.T) {
 }
 
 func TestViewAllOptional(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	storage.Spawn(&Velocity{DX: 1, DY: 1})
 	storage.Spawn(&Health{Current: 100, Max: 100})
@@ -858,8 +858,8 @@ func TestViewAllOptional(t *testing.T) {
 }
 
 func TestViewFillWithOptional(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 10, Y: 20}, &Velocity{DX: 1, DY: 2})
 	id2 := storage.Spawn(&Position{X: 30, Y: 40})
@@ -891,8 +891,8 @@ func TestViewFillWithOptional(t *testing.T) {
 }
 
 func TestViewEmbeddedAndOptionalMixed(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1}, &Health{Current: 100, Max: 100})
 	id2 := storage.Spawn(&Position{X: 2, Y: 2}, &Health{Current: 50, Max: 100})
@@ -920,14 +920,14 @@ func TestViewEmbeddedAndOptionalMixed(t *testing.T) {
 }
 
 func TestViewInvalidTag(t *testing.T) {
-	registerTestComponents()
+	
 	defer func() {
 		r := recover()
 		assert.NotNil(t, r)
 		assert.Contains(t, r.(string), "invalid ecs tag value")
 	}()
 
-	storage := ecs.NewStorage()
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// This should panic due to invalid tag
 	_ = ecs.NewView[struct {
@@ -937,8 +937,8 @@ func TestViewInvalidTag(t *testing.T) {
 }
 
 func TestViewOptionalWithDeletedEntities(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1, Y: 1}, &Velocity{DX: 0.1, DY: 0.1})
 	id2 := storage.Spawn(&Position{X: 2, Y: 2})
@@ -965,8 +965,8 @@ func TestViewOptionalWithDeletedEntities(t *testing.T) {
 }
 
 func TestViewOptionalDoesNotAffectRequiredMatching(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Entity missing required component (Health)
 	id1 := storage.Spawn(&Position{X: 1, Y: 1})
@@ -993,8 +993,8 @@ func TestViewOptionalDoesNotAffectRequiredMatching(t *testing.T) {
 // Tests for View.Spawn functionality
 
 func TestViewSpawn(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1019,8 +1019,8 @@ func TestViewSpawn(t *testing.T) {
 }
 
 func TestViewSpawnMultipleEntities(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1066,8 +1066,8 @@ func TestViewSpawnMultipleEntities(t *testing.T) {
 }
 
 func TestViewSpawnWithPrimitives(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Score
@@ -1094,8 +1094,8 @@ func TestViewSpawnWithPrimitives(t *testing.T) {
 }
 
 func TestViewSpawnWithOptionalComponentsAllPresent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
@@ -1118,8 +1118,8 @@ func TestViewSpawnWithOptionalComponentsAllPresent(t *testing.T) {
 }
 
 func TestViewSpawnWithOptionalComponentsNil(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
@@ -1143,8 +1143,8 @@ func TestViewSpawnWithOptionalComponentsNil(t *testing.T) {
 }
 
 func TestViewSpawnMixedOptional(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity `ecs:"optional"`
@@ -1171,8 +1171,8 @@ func TestViewSpawnMixedOptional(t *testing.T) {
 }
 
 func TestViewSpawnNilRequiredComponentPanics(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		Position *Position
 		Velocity *Velocity
@@ -1195,8 +1195,8 @@ func TestViewSpawnNilRequiredComponentPanics(t *testing.T) {
 }
 
 func TestViewSpawnArchetypeCaching(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1234,8 +1234,8 @@ func TestViewSpawnArchetypeCaching(t *testing.T) {
 }
 
 func TestViewSpawnCompatibleWithStorageSpawn(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1267,8 +1267,8 @@ func TestViewSpawnCompatibleWithStorageSpawn(t *testing.T) {
 }
 
 func TestViewSpawnManyComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1297,8 +1297,8 @@ func TestViewSpawnManyComponents(t *testing.T) {
 }
 
 func TestViewSpawnIterateSpawnedEntities(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1327,8 +1327,8 @@ func TestViewSpawnIterateSpawnedEntities(t *testing.T) {
 }
 
 func TestViewSpawnMutateAfterSpawn(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	view := ecs.NewView[struct {
 		*Position
 		*Velocity
@@ -1356,8 +1356,8 @@ func TestViewSpawnMutateAfterSpawn(t *testing.T) {
 
 // ExampleView_optional demonstrates using optional components in views
 func ExampleView_optional() {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Entities with different health states
 	// Some have health, some don't (invulnerable)
@@ -1411,8 +1411,8 @@ func ExampleView_optional() {
 }
 
 func TestViewWithPointerComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	enemy := &Name{Value: "Boss"}
 	id := storage.Spawn(&Position{X: 5.0, Y: 10.0}, &Target{Enemy: enemy})
@@ -1430,8 +1430,8 @@ func TestViewWithPointerComponents(t *testing.T) {
 }
 
 func TestViewIterWithPointerComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	target1 := &Position{X: 100.0, Y: 200.0}
 	target2 := &Position{X: 300.0, Y: 400.0}
@@ -1453,8 +1453,8 @@ func TestViewIterWithPointerComponents(t *testing.T) {
 }
 
 func TestViewWithSliceComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	items := []string{"sword", "shield"}
 	id := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Inventory{Items: items})

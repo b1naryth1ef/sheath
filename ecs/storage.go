@@ -18,15 +18,17 @@ type reference struct {
 type Storage struct {
 	archetypes map[uint32]*Archetype
 	refs       *intmap.Map[EntityRef, *reference]
+	registry   *ComponentRegistry
 
 	refId EntityRef
 }
 
-// NewStorage creates a new ECS storage system
-func NewStorage() *Storage {
+// NewStorage creates a new ECS storage system with the given component registry
+func NewStorage(registry *ComponentRegistry) *Storage {
 	return &Storage{
 		archetypes: make(map[uint32]*Archetype),
 		refs:       intmap.New[EntityRef, *reference](256),
+		registry:   registry,
 	}
 }
 
@@ -97,7 +99,7 @@ func (s *Storage) Spawn(components ...any) EntityId {
 
 	archetype, exists := s.archetypes[archetypeId]
 	if !exists {
-		archetype = NewArchetype(archetypeId, types)
+		archetype = NewArchetype(archetypeId, types, s.registry)
 		s.archetypes[archetypeId] = archetype
 	}
 
@@ -134,7 +136,7 @@ func (s *Storage) AddComponent(id EntityId, component any) EntityId {
 	newArchetypeId := hashTypesToUint32(newTypes)
 	newArchetype, exists := s.archetypes[newArchetypeId]
 	if !exists {
-		newArchetype = NewArchetype(newArchetypeId, newTypes)
+		newArchetype = NewArchetype(newArchetypeId, newTypes, s.registry)
 		s.archetypes[newArchetypeId] = newArchetype
 	}
 
@@ -188,7 +190,7 @@ func (s *Storage) RemoveComponent(id EntityId, compType reflect.Type) EntityId {
 	newArchetypeId := hashTypesToUint32(newTypes)
 	newArchetype, exists := s.archetypes[newArchetypeId]
 	if !exists {
-		newArchetype = NewArchetype(newArchetypeId, newTypes)
+		newArchetype = NewArchetype(newArchetypeId, newTypes, s.registry)
 		s.archetypes[newArchetypeId] = newArchetype
 	}
 

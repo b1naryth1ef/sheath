@@ -5,18 +5,35 @@ import (
 	"reflect"
 )
 
-// componentFactories stores a factory function for each registered component type.
-var componentFactories = make(map[reflect.Type]func() iComponentStorage)
+// ComponentRegistry manages component type registration for an ECS instance.
+// Each Storage instance has its own ComponentRegistry, allowing multiple
+// independent ECS systems to coexist without interference.
+type ComponentRegistry struct {
+	factories map[reflect.Type]func() iComponentStorage
+}
 
-// RegisterComponent registers a new component type with the ECS.
+// NewComponentRegistry creates a new component registry.
+func NewComponentRegistry() *ComponentRegistry {
+	return &ComponentRegistry{
+		factories: make(map[reflect.Type]func() iComponentStorage),
+	}
+}
+
+// RegisterComponent registers a new component type with the given registry.
 // This must be called for each component type before it can be used.
-func RegisterComponent[T any]() {
+func RegisterComponent[T any](r *ComponentRegistry) {
 	t := reflect.TypeOf((*T)(nil)).Elem()
-	componentFactories[t] = func() iComponentStorage {
+	r.factories[t] = func() iComponentStorage {
 		return &genericComponentStorage[T]{
 			nextIndex: 0,
 		}
 	}
+}
+
+// getFactory returns the factory function for a given component type.
+// Returns nil if the type is not registered.
+func (r *ComponentRegistry) getFactory(t reflect.Type) func() iComponentStorage {
+	return r.factories[t]
 }
 
 const (

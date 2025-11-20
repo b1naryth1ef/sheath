@@ -43,8 +43,7 @@ func TestEntityIdEdgeCases(t *testing.T) {
 
 // Test basic storage operations
 func TestSpawnEntity(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0}, &Velocity{DX: 0.5, DY: 0.5}, Score(32))
 	assert.NotEqual(t, ecs.EntityId(0), id)
@@ -54,8 +53,8 @@ func TestSpawnEntity(t *testing.T) {
 }
 
 func TestGetComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 3.0, Y: 4.0}, &Name{Value: "Test Entity"})
 
@@ -78,8 +77,8 @@ func TestGetComponent(t *testing.T) {
 }
 
 func TestDeleteEntity(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Health{Current: 100, Max: 100})
 
@@ -96,8 +95,8 @@ func TestDeleteEntity(t *testing.T) {
 }
 
 func TestMultipleEntitiesSameArchetype(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn multiple entities with same component types
 	id1 := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Velocity{DX: 0.1, DY: 0.1})
@@ -124,8 +123,8 @@ func TestMultipleEntitiesSameArchetype(t *testing.T) {
 }
 
 func TestMultipleDifferentArchetypes(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1.0, Y: 1.0})
 	id2 := storage.Spawn(&Position{X: 2.0, Y: 2.0}, &Velocity{DX: 0.1, DY: 0.1})
@@ -153,8 +152,8 @@ func TestMultipleDifferentArchetypes(t *testing.T) {
 }
 
 func TestHasComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Velocity{DX: 0.5, DY: 0.5})
 
@@ -165,8 +164,8 @@ func TestHasComponent(t *testing.T) {
 }
 
 func TestComponentMutation(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 1.0})
 
@@ -182,8 +181,8 @@ func TestComponentMutation(t *testing.T) {
 }
 
 func TestDeleteWithStableIndices(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn several entities with same archetype
 	id1 := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Velocity{DX: 0.1, DY: 0.1})
@@ -219,8 +218,8 @@ func TestDeleteWithStableIndices(t *testing.T) {
 }
 
 func TestLargeNumberOfEntities(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	const numEntities = 10000
 
@@ -245,8 +244,8 @@ func TestLargeNumberOfEntities(t *testing.T) {
 }
 
 func TestComponentTypeOrderIndependence(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Spawn entities with same components but in different order
 	id1 := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Velocity{DX: 0.1, DY: 0.1}, &Name{Value: "A"})
@@ -268,7 +267,7 @@ func TestComponentTypeOrderIndependence(t *testing.T) {
 }
 
 func TestInvalidEntityId(t *testing.T) {
-	storage := ecs.NewStorage()
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Try to get component for non-existent entity
 	fakeId := ecs.NewEntityId(9999, 9999)
@@ -280,8 +279,8 @@ func TestInvalidEntityId(t *testing.T) {
 }
 
 func TestPrimitiveComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Test with custom primitive types (non-pointer)
 	id := storage.Spawn(Score(1337), Tag("player"), Temperature(98.6))
@@ -304,8 +303,8 @@ func TestPrimitiveComponents(t *testing.T) {
 }
 
 func TestMixedStructAndPrimitiveComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Mix struct pointers and primitive values
 	id := storage.Spawn(&Position{X: 10, Y: 20}, Score(100), &Name{Value: "test"})
@@ -322,8 +321,8 @@ func TestMixedStructAndPrimitiveComponents(t *testing.T) {
 }
 
 func TestPrimitiveMutation(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(Score(100))
 
@@ -337,8 +336,8 @@ func TestPrimitiveMutation(t *testing.T) {
 }
 
 func TestBuiltinPrimitives(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	// Test with built-in types (not custom types)
 	id := storage.Spawn(int32(42), float64(3.14), string("hello"))
@@ -355,8 +354,8 @@ func TestBuiltinPrimitives(t *testing.T) {
 }
 
 func TestComponentReader(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 	id := storage.Spawn(TestA("A"), TestB("B"))
 
 	testA := ecs.ReadComponent[TestA](storage, id)
@@ -367,8 +366,8 @@ func TestComponentReader(t *testing.T) {
 }
 
 func TestGetArchetype(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(TestA("A"), TestB("B"))
 
@@ -380,8 +379,8 @@ func TestGetArchetype(t *testing.T) {
 }
 
 func TestAddComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
 	ref := storage.CreateEntityRef(id)
@@ -407,8 +406,8 @@ func TestAddComponent(t *testing.T) {
 }
 
 func TestAddComponentWithEntityRef(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 10.0, Y: 20.0})
 	ref := storage.CreateEntityRef(id)
@@ -426,8 +425,8 @@ func TestAddComponentWithEntityRef(t *testing.T) {
 }
 
 func TestRemoveComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0}, &Velocity{DX: 0.5, DY: 0.5})
 	ref := storage.CreateEntityRef(id)
@@ -449,8 +448,8 @@ func TestRemoveComponent(t *testing.T) {
 }
 
 func TestRemoveComponentWithEntityRef(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 5.0, Y: 10.0}, &Velocity{DX: 1.0, DY: 1.0}, &Name{Value: "test"})
 	ref := storage.CreateEntityRef(id)
@@ -471,8 +470,8 @@ func TestRemoveComponentWithEntityRef(t *testing.T) {
 }
 
 func TestRemoveLastComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
 	ref := storage.CreateEntityRef(id)
@@ -487,8 +486,8 @@ func TestRemoveLastComponent(t *testing.T) {
 }
 
 func TestPointerComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	target := &Position{X: 10.0, Y: 20.0}
 
@@ -505,8 +504,8 @@ func TestPointerComponent(t *testing.T) {
 }
 
 func TestSliceComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	items := []string{"sword", "shield", "potion"}
 	id := storage.Spawn(&Inventory{Items: items})
@@ -521,8 +520,8 @@ func TestSliceComponent(t *testing.T) {
 }
 
 func TestMapComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	attrs := map[string]int{"strength": 10, "dexterity": 15}
 	id := storage.Spawn(&Stats{Attributes: attrs})
@@ -537,8 +536,8 @@ func TestMapComponent(t *testing.T) {
 }
 
 func TestMixedPointerAndValueComponents(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	enemy := &Name{Value: "Dragon"}
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0}, &Target{Enemy: enemy})
@@ -552,8 +551,8 @@ func TestMixedPointerAndValueComponents(t *testing.T) {
 }
 
 func TestPointerComponentWithEntityRef(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	next := &Position{X: 5.0, Y: 10.0}
 	id := storage.Spawn(&Link{Next: next})
@@ -570,8 +569,8 @@ func TestPointerComponentWithEntityRef(t *testing.T) {
 }
 
 func TestNestedPointerComponent(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	inner1 := &Inner{Value: 42}
 	inner2 := &Inner{Value: 99}
@@ -588,8 +587,8 @@ func TestNestedPointerComponent(t *testing.T) {
 }
 
 func TestPointerComponentDeletion(t *testing.T) {
-	registerTestComponents()
-	storage := ecs.NewStorage()
+	
+	storage := ecs.NewStorage(newTestRegistry())
 
 	ref := &Position{X: 1.0, Y: 2.0}
 	id := storage.Spawn(&RefComponent{Ref: ref})

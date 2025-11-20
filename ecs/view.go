@@ -298,7 +298,7 @@ func (v *View[T]) Spawn(data T) EntityId {
 
 	archetype, exists := v.storage.archetypes[archetypeId]
 	if !exists {
-		archetype = NewArchetype(archetypeId, sortedTypes)
+		archetype = NewArchetype(archetypeId, sortedTypes, v.storage.registry)
 		v.storage.archetypes[archetypeId] = archetype
 	}
 

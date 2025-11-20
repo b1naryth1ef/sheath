@@ -24,13 +24,19 @@ type Health struct {
 type PlayerName string
 
 func main() {
+	// Create a component registry and register all component types
+	registry := ecs.NewComponentRegistry()
+	ecs.RegisterComponent[Position](registry)
+	ecs.RegisterComponent[Health](registry)
+	ecs.RegisterComponent[PlayerName](registry)
+
 	// Storage handles our entity/component storage
-	storage := ecs.NewStorage()
+	storage := ecs.NewStorage(registry)
 
 	// The easiest way to add a new entity is with the Spawn function
 	player := storage.Spawn(
-		&Position{X: 3.5, Y: 5.3},
-		&Health{Current: 10, Max: 10},
+		Position{X: 3.5, Y: 5.3},
+		Health{Current: 10, Max: 10},
 		PlayerName("joe"),
 	)
 
@@ -75,10 +81,12 @@ for entityId, target := range targetable.Iter() {
 }
 
 // And they support optional components for querying too
-customView := ecs.NewView[struct {
+type CustomView struct {
 	*Position
 	*PlayerName `ecs:"optional"`
-}]
+}
+
+customView := ecs.NewView[CustomView](storage)
 
 // We get all entities that have Position, PlayerName is optionally filled if available
 for entityId, custom := range customView.Iter() {
@@ -86,7 +94,7 @@ for entityId, custom := range customView.Iter() {
 		// We have PlayerName
 	}
 }
-````
+```
 
 ### Archetypes
 
@@ -95,42 +103,76 @@ Archetypes are an abstraction which allow us to group entity storage based on th
 ```go
 type Player struct {}
 
-storage.Spawn(&Player{})
-archetype := storage.GetArchetypeByTypes(reflect.TypeOf[Player]())
-// archetype := storage.GetArchetype(&Player{})
+ecs.RegisterComponent[Player](registry)
+storage.Spawn(Player{})
+archetype := storage.GetArchetype(Player{})
+// or using reflect types:
+// archetype := storage.GetArchetypeByTypes([]reflect.Type{reflect.TypeOf(Player{})})
 ```
 
 ### EntityId and Keeping References
 
-It's tempting to use an `EntityId` to store references between entities. However this can be unsafe depending on how you interact with the `Storage` API. If you use the `Storage.AddComponent(...)`, `Storage.RemoveComponent(...)`, or `Archetype.Compact()` APIs, then `EntityId`'s are **not** guarenteed to be stable, and thus cannot be stored and used in-between these operations.
+It's tempting to use an `EntityId` to store references between entities. However this can be unsafe depending on how you interact with the `Storage` API. If you use the `Storage.AddComponent(...)`, `Storage.RemoveComponent(...)`, or `Archetype.Compact()` APIs, then `EntityId`'s are **not** guaranteed to be stable, and thus cannot be stored and used in-between these operations.
 
 This is because an EntityId encodes both the archetype for the entity, and its position within the archetypes storage. This makes querying and using EntityId's extremely fast, but means they do not remain stable across operations that shuffle the underlying archetype or storage.
 
 Instead we need to use an `EntityRef` which provides a safe and stable reference to an entity. Even as the underlying components of the entity change, or as it moves based on compaction, this reference will remain stable. Entity references are also weak, meaning we can detect when a reference has gone stale due to the underlying entity data being deleted.
 
 ```go
-type AITarget EntityRef
+type AITarget struct {
+	Ref ecs.EntityRef
+}
 type Player struct {}
 type Misc struct {}
 
-playerRef := storage.GetEntityRef(playerId)
-aiId := storage.Spawn(AITarget(playerRef))
-storage.AddComponent(playerId, &Misc{})
+ecs.RegisterComponent[AITarget](registry)
+ecs.RegisterComponent[Player](registry)
+ecs.RegisterComponent[Misc](registry)
+
+playerId := storage.Spawn(Player{})
+playerRef := storage.CreateEntityRef(playerId)
+aiId := storage.Spawn(AITarget{Ref: playerRef})
+
+storage.AddComponent(playerId, Misc{})
 
 // Safely get the entity despite it having moved around, and its EntityId changing
-playerId = storage.ResolveEntityRef(playerRef)
-targetRef := storage.GetComponent(aiId, reflect.TypeFor[AITarget]())
-target := storage.ResolveEntityRef(EntityRef(targetRef))
+playerId, ok := storage.ResolveEntityRef(playerRef)
+if ok {
+	ai := ecs.ReadComponent[AITarget](storage, aiId)
+	targetId, ok := storage.ResolveEntityRef(ai.Ref)
+	if ok {
+		// targetId is valid
+	}
+}
+```
+
+### Adding and Removing Components
+
+Components can be added or removed from entities after they are spawned. Note that these operations may change the entity's archetype and invalidate the EntityId.
+
+```go
+type Velocity struct {
+	DX, DY float64
+}
+
+ecs.RegisterComponent[Velocity](registry)
+
+// Add a component to an existing entity
+id := storage.Spawn(Position{X: 0, Y: 0})
+newId := storage.AddComponent(id, Velocity{DX: 1.0, DY: 1.0})
+
+// Remove a component from an entity
+newId = storage.RemoveComponent(newId, reflect.TypeOf(Velocity{}))
 ```
 
 ### Compaction
 
-The underlying storage for components groups them into blocks of 64. This provides good cache efficiency and also lets us easily track slot status via a `uint64`. While its very unlikely you run into fragementation issues, it is possible for archetypes that experience frequent spawning/despawning with a small percentage of entities remaining long-term. In this case it'd be very likely we experience heavy fragementation. We can optionally call the `Archetype.Compact()` method to forcefully compact the storage, removing empty slots and reducing the number of groups allocated. Compaction will move entity storage and thus may invalidate existing EntityId's.
+The underlying storage for components groups them into blocks of 256. This provides good cache efficiency and also lets us easily track slot status via bitmasks. While it's very unlikely you run into fragmentation issues, it is possible for archetypes that experience frequent spawning/despawning with a small percentage of entities remaining long-term. In this case it'd be very likely we experience heavy fragmentation. We can optionally call the `Archetype.Compact()` method to forcefully compact the storage, removing empty slots and reducing the number of blocks allocated. Compaction will move entity storage and thus may invalidate existing EntityId's.
 
 ```go
 type Player struct {}
 
-storage.Spawn(&Player{})
-archetype := storage.GetArchetypeByTypes(reflect.TypeOf[Player]())
+storage.Spawn(Player{})
+archetype := storage.GetArchetype(Player{})
 archetype.Compact()
-````
+```

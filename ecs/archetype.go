@@ -22,7 +22,7 @@ type Archetype struct {
 }
 
 // NewArchetype creates a new archetype with the given ID and sorted component types
-func NewArchetype(id uint32, types []reflect.Type) *Archetype {
+func NewArchetype(id uint32, types []reflect.Type, registry *ComponentRegistry) *Archetype {
 	a := &Archetype{
 		id:       id,
 		types:    types,
@@ -32,8 +32,8 @@ func NewArchetype(id uint32, types []reflect.Type) *Archetype {
 
 	// Initialize storage for each component type
 	for idx, typ := range types {
-		factory, ok := componentFactories[typ]
-		if !ok {
+		factory := registry.getFactory(typ)
+		if factory == nil {
 			panic("component type " + typ.String() + " not registered")
 		}
 		a.storages[idx] = factory()
