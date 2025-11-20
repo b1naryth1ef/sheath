@@ -496,3 +496,146 @@ func TestRemoveLastComponent(t *testing.T) {
 	comp := storage.GetComponent(id, reflect.TypeOf(Position{}))
 	assert.Nil(t, comp)
 }
+
+func TestPointerComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	target := &Position{X: 10.0, Y: 20.0}
+
+	type AI struct {
+		Target *Position
+	}
+
+	id := storage.Spawn(&AI{Target: target})
+
+	ai := storage.GetComponent(id, reflect.TypeOf(AI{})).(*AI)
+	assert.NotNil(t, ai)
+	assert.NotNil(t, ai.Target)
+	assert.Equal(t, float32(10.0), ai.Target.X)
+	assert.Equal(t, float32(20.0), ai.Target.Y)
+
+	ai.Target.X = 100.0
+	assert.Equal(t, float32(100.0), target.X)
+}
+
+func TestSliceComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Inventory struct {
+		Items []string
+	}
+
+	items := []string{"sword", "shield", "potion"}
+	id := storage.Spawn(&Inventory{Items: items})
+
+	inv := storage.GetComponent(id, reflect.TypeOf(Inventory{})).(*Inventory)
+	assert.NotNil(t, inv)
+	assert.Equal(t, 3, len(inv.Items))
+	assert.Equal(t, "sword", inv.Items[0])
+
+	inv.Items = append(inv.Items, "armor")
+	assert.Equal(t, 4, len(inv.Items))
+}
+
+func TestMapComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Stats struct {
+		Attributes map[string]int
+	}
+
+	attrs := map[string]int{"strength": 10, "dexterity": 15}
+	id := storage.Spawn(&Stats{Attributes: attrs})
+
+	stats := storage.GetComponent(id, reflect.TypeOf(Stats{})).(*Stats)
+	assert.NotNil(t, stats)
+	assert.Equal(t, 10, stats.Attributes["strength"])
+	assert.Equal(t, 15, stats.Attributes["dexterity"])
+
+	stats.Attributes["wisdom"] = 12
+	assert.Equal(t, 3, len(stats.Attributes))
+}
+
+func TestMixedPointerAndValueComponents(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Target struct {
+		Enemy *Name
+	}
+
+	enemy := &Name{Value: "Dragon"}
+	id := storage.Spawn(&Position{X: 1.0, Y: 2.0}, &Target{Enemy: enemy})
+
+	pos := storage.GetComponent(id, reflect.TypeOf(Position{})).(*Position)
+	assert.Equal(t, float32(1.0), pos.X)
+
+	target := storage.GetComponent(id, reflect.TypeOf(Target{})).(*Target)
+	assert.NotNil(t, target.Enemy)
+	assert.Equal(t, "Dragon", target.Enemy.Value)
+}
+
+func TestPointerComponentWithEntityRef(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Link struct {
+		Next *Position
+	}
+
+	next := &Position{X: 5.0, Y: 10.0}
+	id := storage.Spawn(&Link{Next: next})
+	ref := storage.CreateEntityRef(id)
+
+	storage.AddComponent(id, &Velocity{DX: 1.0, DY: 1.0})
+
+	resolvedId, ok := storage.ResolveEntityRef(ref)
+	assert.True(t, ok)
+
+	link := storage.GetComponent(resolvedId, reflect.TypeOf(Link{})).(*Link)
+	assert.NotNil(t, link.Next)
+	assert.Equal(t, float32(5.0), link.Next.X)
+}
+
+func TestNestedPointerComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Inner struct {
+		Value int
+	}
+
+	type Outer struct {
+		Data *Inner
+		List []*Inner
+	}
+
+	inner1 := &Inner{Value: 42}
+	inner2 := &Inner{Value: 99}
+	id := storage.Spawn(&Outer{
+		Data: inner1,
+		List: []*Inner{inner1, inner2},
+	})
+
+	outer := storage.GetComponent(id, reflect.TypeOf(Outer{})).(*Outer)
+	assert.NotNil(t, outer)
+	assert.Equal(t, 42, outer.Data.Value)
+	assert.Equal(t, 2, len(outer.List))
+	assert.Equal(t, 99, outer.List[1].Value)
+}
+
+func TestPointerComponentDeletion(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type RefComponent struct {
+		Ref *Position
+	}
+
+	ref := &Position{X: 1.0, Y: 2.0}
+	id := storage.Spawn(&RefComponent{Ref: ref})
+
+	comp := storage.GetComponent(id, reflect.TypeOf(RefComponent{})).(*RefComponent)
+	assert.NotNil(t, comp.Ref)
+
+	storage.Delete(id)
+
+	comp2 := storage.GetComponent(id, reflect.TypeOf(RefComponent{}))
+	assert.Nil(t, comp2)
+}

@@ -385,6 +385,380 @@ func BenchmarkAddRemoveComponent(b *testing.B) {
 	}
 }
 
+func BenchmarkValueComponents(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	ids := make([]ecs.EntityId, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Velocity{DX: 1.0, DY: 1.0})
+	}
+
+	posType := reflect.TypeOf(Position{})
+
+	b.ResetTimer()
+	for range b.N {
+		idx := rand.IntN(len(ids))
+		comp := storage.GetComponent(ids[idx], posType)
+		if comp == nil {
+			b.Fatal("component is nil")
+		}
+	}
+}
+
+func BenchmarkPointerComponents(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	type AI struct {
+		Target *Position
+	}
+
+	target := &Position{X: 100.0, Y: 200.0}
+	ids := make([]ecs.EntityId, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&AI{Target: target})
+	}
+
+	aiType := reflect.TypeOf(AI{})
+
+	b.ResetTimer()
+	for range b.N {
+		idx := rand.IntN(len(ids))
+		comp := storage.GetComponent(ids[idx], aiType)
+		if comp == nil {
+			b.Fatal("component is nil")
+		}
+	}
+}
+
+func BenchmarkMixedComponents(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	type Link struct {
+		Next *Name
+	}
+
+	next := &Name{Value: "target"}
+	ids := make([]ecs.EntityId, 10000)
+	for i := range ids {
+		ids[i] = storage.Spawn(&Position{X: float32(i), Y: float32(i)}, &Link{Next: next})
+	}
+
+	posType := reflect.TypeOf(Position{})
+	linkType := reflect.TypeOf(Link{})
+
+	b.ResetTimer()
+	for range b.N {
+		idx := rand.IntN(len(ids))
+		storage.GetComponent(ids[idx], posType)
+		storage.GetComponent(ids[idx], linkType)
+	}
+}
+
+func BenchmarkStorageBySize(b *testing.B) {
+	type Tiny struct {
+		A uint8
+	}
+
+	type Small struct {
+		A, B uint32
+	}
+
+	type Medium struct {
+		A, B, C, D float32
+	}
+
+	type Large struct {
+		A, B, C, D, E, F, G, H float64
+	}
+
+	type Huge struct {
+		Data [128]byte
+	}
+
+	runBenchmark := func(b *testing.B, component any, name string) {
+		b.Run(name, func(b *testing.B) {
+			storage := ecs.NewStorage()
+			ids := make([]ecs.EntityId, 10000)
+			for i := range ids {
+				ids[i] = storage.Spawn(component)
+			}
+
+			compType := reflect.TypeOf(component).Elem()
+
+			b.ResetTimer()
+			for range b.N {
+				idx := rand.IntN(len(ids))
+				comp := storage.GetComponent(ids[idx], compType)
+				if comp == nil {
+					b.Fatal("component is nil")
+				}
+			}
+		})
+	}
+
+	runBenchmark(b, &Tiny{A: 1}, "1byte")
+	runBenchmark(b, &Small{A: 1, B: 2}, "8bytes")
+	runBenchmark(b, &Medium{A: 1, B: 2, C: 3, D: 4}, "16bytes")
+	runBenchmark(b, &Large{}, "64bytes")
+	runBenchmark(b, &Huge{}, "128bytes")
+}
+
+func BenchmarkStorageBySizeWithPointers(b *testing.B) {
+	type TinyPtr struct {
+		A *uint8
+	}
+
+	type SmallPtr struct {
+		A, B *uint32
+	}
+
+	type MediumPtr struct {
+		A, B, C, D *float32
+	}
+
+	type LargePtr struct {
+		A, B, C, D, E, F, G, H *float64
+	}
+
+	type HugePtr struct {
+		Data []*byte
+	}
+
+	val := uint8(1)
+	runBenchmark := func(b *testing.B, component any, name string) {
+		b.Run(name+"_ptr", func(b *testing.B) {
+			storage := ecs.NewStorage()
+			ids := make([]ecs.EntityId, 10000)
+			for i := range ids {
+				ids[i] = storage.Spawn(component)
+			}
+
+			compType := reflect.TypeOf(component).Elem()
+
+			b.ResetTimer()
+			for range b.N {
+				idx := rand.IntN(len(ids))
+				comp := storage.GetComponent(ids[idx], compType)
+				if comp == nil {
+					b.Fatal("component is nil")
+				}
+			}
+		})
+	}
+
+	runBenchmark(b, &TinyPtr{A: &val}, "1byte")
+	runBenchmark(b, &SmallPtr{}, "8bytes")
+	runBenchmark(b, &MediumPtr{}, "16bytes")
+	runBenchmark(b, &LargePtr{}, "64bytes")
+	runBenchmark(b, &HugePtr{Data: make([]*byte, 16)}, "128bytes")
+}
+
+func BenchmarkCacheEfficiency(b *testing.B) {
+	type Component8 struct {
+		A, B uint32
+	}
+
+	type Component8Ptr struct {
+		A *uint32
+		B *uint32
+	}
+
+	b.Run("Sequential_Value", func(b *testing.B) {
+		storage := ecs.NewStorage()
+		ids := make([]ecs.EntityId, 10000)
+		for i := range ids {
+			ids[i] = storage.Spawn(&Component8{A: uint32(i), B: uint32(i * 2)})
+		}
+
+		compType := reflect.TypeOf(Component8{})
+
+		b.ResetTimer()
+		for range b.N {
+			sum := uint32(0)
+			for _, id := range ids {
+				comp := storage.GetComponent(id, compType).(*Component8)
+				sum += comp.A + comp.B
+			}
+			if sum == 0 {
+				b.Fatal("sum is zero")
+			}
+		}
+	})
+
+	b.Run("Sequential_Pointer", func(b *testing.B) {
+		storage := ecs.NewStorage()
+		ids := make([]ecs.EntityId, 10000)
+		val := uint32(42)
+		for i := range ids {
+			ids[i] = storage.Spawn(&Component8Ptr{A: &val, B: &val})
+		}
+
+		compType := reflect.TypeOf(Component8Ptr{})
+
+		b.ResetTimer()
+		for range b.N {
+			sum := uint32(0)
+			for _, id := range ids {
+				comp := storage.GetComponent(id, compType).(*Component8Ptr)
+				if comp.A != nil {
+					sum += *comp.A
+				}
+				if comp.B != nil {
+					sum += *comp.B
+				}
+			}
+			if sum == 0 {
+				b.Fatal("sum is zero")
+			}
+		}
+	})
+
+	b.Run("Random_Value", func(b *testing.B) {
+		storage := ecs.NewStorage()
+		ids := make([]ecs.EntityId, 10000)
+		for i := range ids {
+			ids[i] = storage.Spawn(&Component8{A: uint32(i), B: uint32(i * 2)})
+		}
+
+		compType := reflect.TypeOf(Component8{})
+
+		b.ResetTimer()
+		for range b.N {
+			sum := uint32(0)
+			for range 1000 {
+				idx := rand.IntN(len(ids))
+				comp := storage.GetComponent(ids[idx], compType).(*Component8)
+				sum += comp.A + comp.B
+			}
+			if sum == 0 {
+				b.Fatal("sum is zero")
+			}
+		}
+	})
+
+	b.Run("Random_Pointer", func(b *testing.B) {
+		storage := ecs.NewStorage()
+		ids := make([]ecs.EntityId, 10000)
+		val := uint32(42)
+		for i := range ids {
+			ids[i] = storage.Spawn(&Component8Ptr{A: &val, B: &val})
+		}
+
+		compType := reflect.TypeOf(Component8Ptr{})
+
+		b.ResetTimer()
+		for range b.N {
+			sum := uint32(0)
+			for range 1000 {
+				idx := rand.IntN(len(ids))
+				comp := storage.GetComponent(ids[idx], compType).(*Component8Ptr)
+				if comp.A != nil {
+					sum += *comp.A
+				}
+				if comp.B != nil {
+					sum += *comp.B
+				}
+			}
+			if sum == 0 {
+				b.Fatal("sum is zero")
+			}
+		}
+	})
+}
+
+func BenchmarkViewIterCacheEfficiency(b *testing.B) {
+	type Component16 struct {
+		A, B, C, D float32
+	}
+
+	type Component16Ptr struct {
+		A *float32
+		B *float32
+		C *float32
+		D *float32
+	}
+
+	b.Run("Value_10k", func(b *testing.B) {
+		storage := ecs.NewStorage()
+		for range 10000 {
+			storage.Spawn(&Position{X: rand.Float32(), Y: rand.Float32()}, &Component16{})
+		}
+
+		view := ecs.NewView[struct {
+			*Position
+			*Component16
+		}](storage)
+
+		b.ResetTimer()
+		for range b.N {
+			for _, item := range view.Iter() {
+				item.Position.X += 1.0
+				item.Component16.A += 1.0
+			}
+		}
+	})
+
+	b.Run("Pointer_10k", func(b *testing.B) {
+		storage := ecs.NewStorage()
+		val := float32(1.0)
+		for range 10000 {
+			storage.Spawn(&Position{X: rand.Float32(), Y: rand.Float32()}, &Component16Ptr{A: &val, B: &val, C: &val, D: &val})
+		}
+
+		view := ecs.NewView[struct {
+			*Position
+			*Component16Ptr
+		}](storage)
+
+		b.ResetTimer()
+		for range b.N {
+			for _, item := range view.Iter() {
+				item.Position.X += 1.0
+				if item.Component16Ptr.A != nil {
+					*item.Component16Ptr.A += 1.0
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkSpawn100kComparison(b *testing.B) {
+	b.Run("ValueComponents", func(b *testing.B) {
+		for range b.N {
+			storage := ecs.NewStorage()
+			for range 100000 {
+				storage.Spawn(&Position{X: 1.0, Y: 2.0}, &Velocity{DX: 0.5, DY: 0.5})
+			}
+		}
+	})
+
+	b.Run("PointerComponents", func(b *testing.B) {
+		type Link struct {
+			Next *Position
+		}
+		next := &Position{X: 1.0, Y: 2.0}
+		for range b.N {
+			storage := ecs.NewStorage()
+			for range 100000 {
+				storage.Spawn(&Link{Next: next})
+			}
+		}
+	})
+
+	b.Run("MixedComponents", func(b *testing.B) {
+		type AI struct {
+			Target *Position
+		}
+		target := &Position{X: 1.0, Y: 2.0}
+		for range b.N {
+			storage := ecs.NewStorage()
+			for range 100000 {
+				storage.Spawn(&Position{X: 1.0, Y: 2.0}, &AI{Target: target})
+			}
+		}
+	})
+}
+
 // Example showing basic usage
 func ExampleStorage() {
 	storage := ecs.NewStorage()

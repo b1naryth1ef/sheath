@@ -182,10 +182,64 @@ func (v *View[T]) Iter() iter.Seq2[EntityId, T] {
 			var result T
 			resultPtr := unsafe.Pointer(&result)
 
+			// Check if we're using GC storage (slower path) or block storage (fast path)
+			if firstStorage.containsPointers {
+				// GC storage path - iterate through blocks
+				for blockIdx, block := range firstStorage.gcBlocks {
+					for slotIdx := range blockSize {
+						if !block.filled[slotIdx] {
+							continue
+						}
+
+						entityIndex := uint32(blockIdx*blockSize + slotIdx)
+						entityId := NewEntityId(archetypeId, entityIndex)
+
+						// Populate all components
+						allRequiredComponentsFound := true
+						for i, storageIdx := range storageIndices {
+							fieldPtr := unsafe.Pointer(uintptr(resultPtr) + v.fieldOffset[i])
+
+							if storageIdx == -1 {
+								if v.optional[i] {
+									*(*unsafe.Pointer)(fieldPtr) = nil
+									continue
+								} else {
+									allRequiredComponentsFound = false
+									break
+								}
+							}
+
+							component := archetype.storages[storageIdx].Get(int(entityIndex))
+							if component == nil {
+								if v.optional[i] {
+									*(*unsafe.Pointer)(fieldPtr) = nil
+									continue
+								} else {
+									allRequiredComponentsFound = false
+									break
+								}
+							}
+
+							componentPtr := (*iface)(unsafe.Pointer(&component)).data
+							*(*unsafe.Pointer)(fieldPtr) = componentPtr
+						}
+
+						if !allRequiredComponentsFound {
+							continue
+						}
+
+						if !yield(entityId, result) {
+							return
+						}
+					}
+				}
+				continue
+			}
+
+			// Block storage path (original fast path)
 			for blockIdx, block := range firstStorage.blocks {
 				for slotIdx := range blockSize {
-					mask := uint64(1) << slotIdx
-					if block.filled&mask == 0 {
+					if !block.filled[slotIdx] {
 						continue
 					}
 

@@ -701,3 +701,98 @@ func BenchmarkViewOptionalVsRequired(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkViewIterValueComponents(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	for range 10000 {
+		storage.Spawn(
+			&Position{X: rand.Float32(), Y: rand.Float32()},
+			&Velocity{DX: rand.Float32(), DY: rand.Float32()},
+		)
+	}
+
+	view := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	b.ResetTimer()
+	for range b.N {
+		var count float32
+		for _, item := range view.Iter() {
+			count += item.Position.X
+		}
+	}
+}
+
+func BenchmarkViewIterPointerComponents(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	type AI struct {
+		Target *Position
+	}
+
+	target := &Position{X: 100.0, Y: 200.0}
+	for range 10000 {
+		storage.Spawn(
+			&Position{X: rand.Float32(), Y: rand.Float32()},
+			&AI{Target: target},
+		)
+	}
+
+	view := ecs.NewView[struct {
+		*Position
+		*AI
+	}](storage)
+
+	b.ResetTimer()
+	for range b.N {
+		var count float32
+		for _, item := range view.Iter() {
+			count += item.Position.X
+		}
+	}
+}
+
+func BenchmarkViewIterMixedComponents(b *testing.B) {
+	storage := ecs.NewStorage()
+
+	type Link struct {
+		Next *Name
+	}
+
+	next := &Name{Value: "target"}
+	for range 5000 {
+		storage.Spawn(&Position{X: rand.Float32(), Y: rand.Float32()}, &Velocity{DX: 1.0, DY: 1.0})
+	}
+	for range 5000 {
+		storage.Spawn(&Position{X: rand.Float32(), Y: rand.Float32()}, &Link{Next: next})
+	}
+
+	valueView := ecs.NewView[struct {
+		*Position
+		*Velocity
+	}](storage)
+
+	pointerView := ecs.NewView[struct {
+		*Position
+		*Link
+	}](storage)
+
+	b.Run("ValueArchetype", func(b *testing.B) {
+		for range b.N {
+			for _, item := range valueView.Iter() {
+				item.Position.X += item.Velocity.DX
+			}
+		}
+	})
+
+	b.Run("PointerArchetype", func(b *testing.B) {
+		for range b.N {
+			for _, item := range pointerView.Iter() {
+				item.Position.X += 0.1
+			}
+		}
+	})
+}

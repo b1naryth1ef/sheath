@@ -1362,3 +1362,72 @@ func ExampleView_optional() {
 	// Entity at (20, 20) with health 90/100
 	// Invulnerable entity at (30, 30)
 }
+
+func TestViewWithPointerComponents(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Target struct {
+		Enemy *Name
+	}
+
+	enemy := &Name{Value: "Boss"}
+	id := storage.Spawn(&Position{X: 5.0, Y: 10.0}, &Target{Enemy: enemy})
+
+	view := ecs.NewView[struct {
+		*Position
+		*Target
+	}](storage)
+
+	item := view.Get(id)
+	assert.NotNil(t, item)
+	assert.Equal(t, float32(5.0), item.Position.X)
+	assert.NotNil(t, item.Target.Enemy)
+	assert.Equal(t, "Boss", item.Target.Enemy.Value)
+}
+
+func TestViewIterWithPointerComponents(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type AI struct {
+		Target *Position
+	}
+
+	target1 := &Position{X: 100.0, Y: 200.0}
+	target2 := &Position{X: 300.0, Y: 400.0}
+
+	storage.Spawn(&Position{X: 1.0, Y: 1.0}, &AI{Target: target1})
+	storage.Spawn(&Position{X: 2.0, Y: 2.0}, &AI{Target: target2})
+
+	view := ecs.NewView[struct {
+		*Position
+		*AI
+	}](storage)
+
+	count := 0
+	for _, item := range view.Iter() {
+		assert.NotNil(t, item.AI.Target)
+		count++
+	}
+	assert.Equal(t, 2, count)
+}
+
+func TestViewWithSliceComponent(t *testing.T) {
+	storage := ecs.NewStorage()
+
+	type Inventory struct {
+		Items []string
+	}
+
+	items := []string{"sword", "shield"}
+	id := storage.Spawn(&Position{X: 1.0, Y: 1.0}, &Inventory{Items: items})
+
+	view := ecs.NewView[struct {
+		*Position
+		*Inventory
+	}](storage)
+
+	item := view.Get(id)
+	assert.NotNil(t, item)
+	assert.Equal(t, 2, len(item.Inventory.Items))
+	assert.Equal(t, "sword", item.Inventory.Items[0])
+}
