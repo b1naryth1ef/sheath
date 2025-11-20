@@ -4,73 +4,75 @@ import (
 	"reflect"
 	"sort"
 	"unsafe"
-
-	"github.com/kamstrup/intmap"
+	"weak"
 )
-
-type reference struct {
-	ref     EntityRef
-	current EntityId
-	deleted bool
-}
 
 // Storage is the main ECS storage interface
 type Storage struct {
 	archetypes map[uint32]*Archetype
-	refs       *intmap.Map[EntityRef, *reference]
 	registry   *ComponentRegistry
-
-	refId EntityRef
 }
 
 // NewStorage creates a new ECS storage system with the given component registry
 func NewStorage(registry *ComponentRegistry) *Storage {
 	return &Storage{
 		archetypes: make(map[uint32]*Archetype),
-		refs:       intmap.New[EntityRef, *reference](256),
 		registry:   registry,
 	}
 }
 
-func (s *Storage) CreateEntityRef(id EntityId) EntityRef {
-	existing, ok := s.archetypes[id.ArchetypeId()].refs.Get(id)
-	if ok {
-		return existing.ref
+func (s *Storage) CreateEntityRef(id EntityId) *EntityRef {
+	archetype := s.archetypes[id.ArchetypeId()]
+	if archetype == nil {
+		return nil
 	}
 
-	refId := s.refId
-	s.refId++
-
-	ref := &reference{
-		ref:     refId,
-		current: id,
-		deleted: false,
+	// Check if we already have a ref for this entity
+	if weakPtr, ok := archetype.refs.Get(id); ok {
+		if ref := weakPtr.Value(); ref != nil {
+			return ref
+		}
+		// Weak pointer is dead, remove it
+		archetype.refs.Del(id)
 	}
 
-	s.refs.Put(refId, ref)
-	s.archetypes[id.ArchetypeId()].refs.Put(id, ref)
+	// Create new EntityRef
+	ref := &EntityRef{
+		Id:        id,
+		Archetype: archetype,
+	}
 
-	return refId
+	// Store weak pointer in archetype
+	weakPtr := weak.Make(ref)
+	archetype.refs.Put(id, weakPtr)
+
+	return ref
 }
 
-func (s *Storage) ResolveEntityRef(refId EntityRef) (EntityId, bool) {
-	ref, ok := s.refs.Get(refId)
-	if !ok {
+func (s *Storage) ResolveEntityRef(ref *EntityRef) (EntityId, bool) {
+	if ref == nil {
 		return 0, false
 	}
-	if ref.deleted {
+	// Check if the ref has been invalidated (Id == 0 means deleted)
+	if ref.Id == 0 {
 		return 0, false
 	}
-	return ref.current, true
+	return ref.Id, true
 }
 
-func (s *Storage) InvalidateEntityRef(refId EntityRef) bool {
-	ref, ok := s.refs.Get(refId)
-	if !ok {
+func (s *Storage) InvalidateEntityRef(ref *EntityRef) bool {
+	if ref == nil || ref.Id == 0 {
 		return false
 	}
-	s.archetypes[ref.current.ArchetypeId()].refs.Del(ref.current)
-	s.refs.Del(refId)
+
+	// Mark the ref as deleted
+	archetype := s.archetypes[ref.Id.ArchetypeId()]
+	if archetype != nil {
+		archetype.refs.Del(ref.Id)
+	}
+
+	ref.Id = 0
+	ref.Archetype = nil
 	return true
 }
 
@@ -140,7 +142,8 @@ func (s *Storage) AddComponent(id EntityId, component any) EntityId {
 		s.archetypes[newArchetypeId] = newArchetype
 	}
 
-	ref, hasRef := oldArchetype.refs.Get(id)
+	// Get the weak pointer if it exists
+	weakPtr, hasRef := oldArchetype.refs.Get(id)
 
 	components := make([]any, 0, len(newTypes))
 	for _, typ := range newTypes {
@@ -155,10 +158,14 @@ func (s *Storage) AddComponent(id EntityId, component any) EntityId {
 	newIndex := newArchetype.Spawn(components)
 	newId := NewEntityId(newArchetypeId, newIndex)
 
+	// Update EntityRef if it exists
 	if hasRef {
+		if ref := weakPtr.Value(); ref != nil {
+			ref.Id = newId
+			ref.Archetype = newArchetype
+		}
 		oldArchetype.refs.Del(id)
-		ref.current = newId
-		newArchetype.refs.Put(newId, ref)
+		newArchetype.refs.Put(newId, weakPtr)
 	}
 
 	oldArchetype.Delete(id.Index())
@@ -175,13 +182,16 @@ func (s *Storage) RemoveComponent(id EntityId, compType reflect.Type) EntityId {
 		}
 	}
 
-	ref, hasRef := oldArchetype.refs.Get(id)
+	weakPtr, hasRef := oldArchetype.refs.Get(id)
 
 	if len(newTypes) == 0 {
+		// Entity has no components left, delete it
 		if hasRef {
+			if ref := weakPtr.Value(); ref != nil {
+				ref.Id = 0
+				ref.Archetype = nil
+			}
 			oldArchetype.refs.Del(id)
-			ref.deleted = true
-			s.refs.Del(ref.ref)
 		}
 		oldArchetype.Delete(id.Index())
 		return 0
@@ -203,10 +213,14 @@ func (s *Storage) RemoveComponent(id EntityId, compType reflect.Type) EntityId {
 	newIndex := newArchetype.Spawn(components)
 	newId := NewEntityId(newArchetypeId, newIndex)
 
+	// Update EntityRef if it exists
 	if hasRef {
+		if ref := weakPtr.Value(); ref != nil {
+			ref.Id = newId
+			ref.Archetype = newArchetype
+		}
 		oldArchetype.refs.Del(id)
-		ref.current = newId
-		newArchetype.refs.Put(newId, ref)
+		newArchetype.refs.Put(newId, weakPtr)
 	}
 
 	oldArchetype.Delete(id.Index())

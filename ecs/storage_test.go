@@ -631,7 +631,7 @@ func TestArchetypeCompactWithEntityRefs(t *testing.T) {
 
 	type EntityData struct {
 		id  ecs.EntityId
-		ref ecs.EntityRef
+		ref *ecs.EntityRef
 		x   float32
 		y   float32
 	}
@@ -676,7 +676,7 @@ func TestArchetypeCompactWithEntityRefs(t *testing.T) {
 func TestArchetypeCompactMultipleTimes(t *testing.T) {
 	storage := ecs.NewStorage(newTestRegistry())
 
-	refs := make([]ecs.EntityRef, 0)
+	refs := make([]*ecs.EntityRef, 0)
 
 	for i := range 50 {
 		id := storage.Spawn(Position{X: float32(i), Y: float32(i)}, Velocity{DX: 1.0, DY: 1.0})

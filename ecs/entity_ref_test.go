@@ -9,11 +9,15 @@ import (
 )
 
 func TestEntityRefBasicLifecycle(t *testing.T) {
-	
+
 	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
 	ref := storage.CreateEntityRef(id)
+
+	assert.NotNil(t, ref)
+	assert.Equal(t, id, ref.Id)
+	assert.NotNil(t, ref.Archetype)
 
 	resolved, ok := storage.ResolveEntityRef(ref)
 	assert.True(t, ok)
@@ -31,7 +35,7 @@ func TestEntityRefBasicLifecycle(t *testing.T) {
 }
 
 func TestEntityRefStability(t *testing.T) {
-	
+
 	storage := ecs.NewStorage(newTestRegistry())
 
 	id1 := storage.Spawn(&Position{X: 1.0, Y: 1.0})
@@ -57,7 +61,7 @@ func TestEntityRefStability(t *testing.T) {
 }
 
 func TestEntityRefIdempotency(t *testing.T) {
-	
+
 	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 5.0, Y: 10.0})
@@ -65,11 +69,12 @@ func TestEntityRefIdempotency(t *testing.T) {
 	ref1 := storage.CreateEntityRef(id)
 	ref2 := storage.CreateEntityRef(id)
 
-	assert.Equal(t, ref1, ref2)
+	// Should return the same EntityRef pointer
+	assert.Same(t, ref1, ref2)
 }
 
 func TestEntityRefMultipleInvalidations(t *testing.T) {
-	
+
 	storage := ecs.NewStorage(newTestRegistry())
 
 	id := storage.Spawn(&Position{X: 1.0, Y: 1.0})
@@ -88,9 +93,9 @@ func TestEntityRefMultipleInvalidations(t *testing.T) {
 func TestEntityRefInvalidBeforeCreate(t *testing.T) {
 	storage := ecs.NewStorage(newTestRegistry())
 
-	_, ok := storage.ResolveEntityRef(ecs.EntityRef(9999))
+	_, ok := storage.ResolveEntityRef(nil)
 	assert.False(t, ok)
 
-	ok = storage.InvalidateEntityRef(ecs.EntityRef(9999))
+	ok = storage.InvalidateEntityRef(nil)
 	assert.False(t, ok)
 }

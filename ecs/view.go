@@ -123,7 +123,7 @@ func (v *View[T]) Get(id EntityId) *T {
 }
 
 // GetRef returns a populated view struct for the given entity ref, or nil if invalid
-func (v *View[T]) GetRef(ref EntityRef) *T {
+func (v *View[T]) GetRef(ref *EntityRef) *T {
 	entityId, ok := v.storage.ResolveEntityRef(ref)
 	if !ok {
 		return nil

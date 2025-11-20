@@ -3,6 +3,7 @@ package ecs
 import (
 	"reflect"
 	"slices"
+	"weak"
 
 	"github.com/kamstrup/intmap"
 )
@@ -18,7 +19,7 @@ type Archetype struct {
 	id       uint32
 	types    []reflect.Type
 	storages []iComponentStorage
-	refs     *intmap.Map[EntityId, *reference]
+	refs     *intmap.Map[EntityId, weak.Pointer[EntityRef]]
 }
 
 // NewArchetype creates a new archetype with the given ID and sorted component types
@@ -27,7 +28,7 @@ func NewArchetype(id uint32, types []reflect.Type, registry *ComponentRegistry) 
 		id:       id,
 		types:    types,
 		storages: make([]iComponentStorage, len(types)),
-		refs:     intmap.New[EntityId, *reference](256),
+		refs:     intmap.New[EntityId, weak.Pointer[EntityRef]](256),
 	}
 
 	// Initialize storage for each component type
@@ -84,9 +85,13 @@ func (a *Archetype) GetComponent(entityIndex uint32, compType reflect.Type) any 
 func (a *Archetype) Delete(entityIndex uint32) {
 	entityId := NewEntityId(a.id, entityIndex)
 
-	ref, ok := a.refs.Get(entityId)
+	weakPtr, ok := a.refs.Get(entityId)
 	if ok {
-		ref.deleted = true
+		// Update the EntityRef to mark it as deleted
+		if ref := weakPtr.Value(); ref != nil {
+			ref.Id = 0
+			ref.Archetype = nil
+		}
 		a.refs.Del(entityId)
 	}
 
@@ -123,11 +128,28 @@ func (a *Archetype) Compact() {
 		a.storages[i].Compact()
 	}
 
-	for oldId, newId := range indexMap {
-		ref, ok := a.refs.Get(NewEntityId(a.id, uint32(oldId)))
+	// Update EntityRefs to point to new indices and clean up dead weak pointers
+	// First, update all the refs and collect the mappings
+	updatedRefs := make(map[EntityId]weak.Pointer[EntityRef])
+	for oldIdx, newIdx := range indexMap {
+		oldEntityId := NewEntityId(a.id, uint32(oldIdx))
+		weakPtr, ok := a.refs.Get(oldEntityId)
 		if ok {
-			ref.current = NewEntityId(a.id, uint32(newId))
+			if ref := weakPtr.Value(); ref != nil {
+				// Update the EntityRef's Id to point to the new index
+				ref.Id = NewEntityId(a.id, uint32(newIdx))
+				updatedRefs[NewEntityId(a.id, uint32(newIdx))] = weakPtr
+			}
+			// Mark old entry for deletion (whether weak pointer is alive or dead)
 		}
+	}
+
+	// Clear all old entries from refs map
+	a.refs.Clear()
+
+	// Add back only the updated entries
+	for newEntityId, weakPtr := range updatedRefs {
+		a.refs.Put(newEntityId, weakPtr)
 	}
 }
 
