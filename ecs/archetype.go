@@ -17,7 +17,7 @@ func (a byTypeName) Less(i, j int) bool { return a[i].String() < a[j].String() }
 type Archetype struct {
 	id       uint32
 	types    []reflect.Type
-	storages []*ComponentStorage
+	storages []iComponentStorage
 	refs     *intmap.Map[EntityId, *reference]
 }
 
@@ -26,13 +26,17 @@ func NewArchetype(id uint32, types []reflect.Type) *Archetype {
 	a := &Archetype{
 		id:       id,
 		types:    types,
-		storages: make([]*ComponentStorage, len(types)),
+		storages: make([]iComponentStorage, len(types)),
 		refs:     intmap.New[EntityId, *reference](256),
 	}
 
 	// Initialize storage for each component type
 	for idx, typ := range types {
-		a.storages[idx] = NewComponentStorage(typ, 256)
+		factory, ok := componentFactories[typ]
+		if !ok {
+			panic("component type " + typ.String() + " not registered")
+		}
+		a.storages[idx] = factory()
 	}
 
 	return a

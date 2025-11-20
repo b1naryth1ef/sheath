@@ -5,19 +5,13 @@ import (
 	"unsafe"
 )
 
-// iface represents the internal memory layout of an interface{}.
-type iface struct {
-	typ  unsafe.Pointer
-	data unsafe.Pointer
-}
-
 const (
 	blockSize = 256
 )
 
 // componentBlock represents a block of components with tracking for filled slots
 type componentBlock struct {
-	data   []byte
+	data   unsafe.Pointer
 	filled [blockSize]bool
 }
 
@@ -35,6 +29,11 @@ type ComponentStorage struct {
 
 	containsPointers bool
 	gcBlocks         []gcBlock
+
+	// freeSlots stores the indices of deleted components that can be reused
+	freeSlots []int
+	// nextIndex is the next available index for new components when freeSlots is empty
+	nextIndex int
 }
 
 // typeContainsPointers recursively checks if a type contains pointers, maps, slices, or channels
@@ -73,6 +72,7 @@ func NewComponentStorage(t reflect.Type, initialCapacity int) *ComponentStorage 
 			stride:           stride,
 			containsPointers: true,
 			gcBlocks:         gcBlocks,
+			nextIndex:        0,
 		}
 	}
 
@@ -82,8 +82,10 @@ func NewComponentStorage(t reflect.Type, initialCapacity int) *ComponentStorage 
 	}
 
 	blocks := make([]componentBlock, numBlocks)
+	blockBytes := stride * blockSize
 	for i := range blocks {
-		blocks[i].data = make([]byte, stride*blockSize)
+		// Allocate raw memory for the block
+		blocks[i].data = unsafe.Pointer(&make([]byte, blockBytes)[0])
 	}
 
 	return &ComponentStorage{
@@ -91,11 +93,12 @@ func NewComponentStorage(t reflect.Type, initialCapacity int) *ComponentStorage 
 		stride:           stride,
 		typ:              t,
 		containsPointers: false,
+		nextIndex:        0,
 	}
 }
 
 // Append adds a component to storage and returns its index
-// Finds the first empty slot or allocates a new one
+// It reuses slots from deleted components or appends to the end.
 func (cs *ComponentStorage) Append(item any) int {
 	if cs.containsPointers {
 		return cs.appendGC(item)
@@ -104,55 +107,83 @@ func (cs *ComponentStorage) Append(item any) int {
 }
 
 func (cs *ComponentStorage) appendGC(item any) int {
-	for blockIdx := range cs.gcBlocks {
-		block := &cs.gcBlocks[blockIdx]
+	// Try to reuse a slot from the free list
+	if len(cs.freeSlots) > 0 {
+		index := cs.freeSlots[len(cs.freeSlots)-1]
+		cs.freeSlots = cs.freeSlots[:len(cs.freeSlots)-1]
 
-		for slotIdx := range blockSize {
-			if !block.filled[slotIdx] {
-				block.data[slotIdx] = item
-				block.filled[slotIdx] = true
-				return blockIdx*blockSize + slotIdx
-			}
-		}
+		blockIdx := index / blockSize
+		slotIdx := index % blockSize
+
+		block := &cs.gcBlocks[blockIdx]
+		block.data[slotIdx] = item
+		block.filled[slotIdx] = true
+		return index
 	}
 
-	// No empty slots found, allocate a new block
-	var newBlock gcBlock
-	newBlock.data[0] = item
-	newBlock.filled[0] = true
-	cs.gcBlocks = append(cs.gcBlocks, newBlock)
-	return (len(cs.gcBlocks) - 1) * blockSize
+	// No free slots, append to the end
+	index := cs.nextIndex
+	cs.nextIndex++
+
+	blockIdx := index / blockSize
+	slotIdx := index % blockSize
+
+	// Allocate new block if necessary
+	if blockIdx >= len(cs.gcBlocks) {
+		var newBlock gcBlock
+		cs.gcBlocks = append(cs.gcBlocks, newBlock)
+	}
+
+	block := &cs.gcBlocks[blockIdx]
+	block.data[slotIdx] = item
+	block.filled[slotIdx] = true
+	return index
 }
 
 func (cs *ComponentStorage) appendBlock(item any) int {
-	for blockIdx := range cs.blocks {
-		block := &cs.blocks[blockIdx]
+	// Try to reuse a slot from the free list
+	if len(cs.freeSlots) > 0 {
+		index := cs.freeSlots[len(cs.freeSlots)-1]
+		cs.freeSlots = cs.freeSlots[:len(cs.freeSlots)-1]
 
-		for slotIdx := range blockSize {
-			if !block.filled[slotIdx] {
-				block.filled[slotIdx] = true
-				globalIndex := blockIdx*blockSize + slotIdx
-				cs.writeComponent(blockIdx, slotIdx, item)
-				return globalIndex
-			}
-		}
+		blockIdx := index / blockSize
+		slotIdx := index % blockSize
+
+		block := &cs.blocks[blockIdx]
+		block.filled[slotIdx] = true
+		cs.writeComponent(blockIdx, slotIdx, item)
+		return index
 	}
 
-	// No empty slots found, need to allocate a new block
-	var newBlock componentBlock
-	newBlock.data = make([]byte, cs.stride*blockSize)
-	newBlock.filled[0] = true
-	cs.blocks = append(cs.blocks, newBlock)
-	blockIdx := len(cs.blocks) - 1
-	cs.writeComponent(blockIdx, 0, item)
-	return blockIdx * blockSize
+	// No free slots, append to the end
+	index := cs.nextIndex
+	cs.nextIndex++
+
+	blockIdx := index / blockSize
+	slotIdx := index % blockSize
+
+	// Allocate new block if necessary
+	if blockIdx >= len(cs.blocks) {
+		var newBlock componentBlock
+		blockBytes := cs.stride * blockSize
+		newBlock.data = unsafe.Pointer(&make([]byte, blockBytes)[0])
+
+		cs.blocks = append(cs.blocks, newBlock)
+	}
+
+	block := &cs.blocks[blockIdx]
+	block.filled[slotIdx] = true
+	cs.writeComponent(blockIdx, slotIdx, item)
+	return index
 }
 
 // writeComponent writes a component to a specific block and slot
 func (cs *ComponentStorage) writeComponent(blockIdx, slotIdx int, item any) {
 	ifacePtr := (*iface)(unsafe.Pointer(&item))
 	offset := uintptr(slotIdx) * cs.stride
-	targetPtr := unsafe.Pointer(&cs.blocks[blockIdx].data[offset])
+	targetPtr := unsafe.Pointer(uintptr(cs.blocks[blockIdx].data) + offset)
+
+	// Use efficient bulk copy via unsafe slices
 	srcBytes := unsafe.Slice((*byte)(ifacePtr.data), cs.stride)
 	dstBytes := unsafe.Slice((*byte)(targetPtr), cs.stride)
 	copy(dstBytes, srcBytes)
@@ -206,50 +237,39 @@ func (cs *ComponentStorage) getBlock(index int) any {
 	}
 
 	offset := uintptr(slotIdx) * cs.stride
-	elementPtr := unsafe.Pointer(&block.data[offset])
+	elementPtr := unsafe.Pointer(uintptr(block.data) + offset)
 	return reflect.NewAt(cs.typ, elementPtr).Interface()
 }
 
 // Delete marks a component slot as empty
 func (cs *ComponentStorage) Delete(index int) {
+	if index < 0 {
+		return
+	}
+
+	blockIdx := index / blockSize
+	slotIdx := index % blockSize
+
 	if cs.containsPointers {
-		cs.deleteGC(index)
-		return
+		if blockIdx >= len(cs.gcBlocks) {
+			return
+		}
+		block := &cs.gcBlocks[blockIdx]
+		if block.filled[slotIdx] {
+			block.filled[slotIdx] = false
+			block.data[slotIdx] = nil
+			cs.freeSlots = append(cs.freeSlots, index)
+		}
+	} else {
+		if blockIdx >= len(cs.blocks) {
+			return
+		}
+		block := &cs.blocks[blockIdx]
+		if block.filled[slotIdx] {
+			block.filled[slotIdx] = false
+			cs.freeSlots = append(cs.freeSlots, index)
+		}
 	}
-	cs.deleteBlock(index)
-}
-
-func (cs *ComponentStorage) deleteGC(index int) {
-	if index < 0 {
-		return
-	}
-
-	blockIdx := index / blockSize
-	slotIdx := index % blockSize
-
-	if blockIdx >= len(cs.gcBlocks) {
-		return
-	}
-
-	block := &cs.gcBlocks[blockIdx]
-	block.filled[slotIdx] = false
-	block.data[slotIdx] = nil
-}
-
-func (cs *ComponentStorage) deleteBlock(index int) {
-	if index < 0 {
-		return
-	}
-
-	blockIdx := index / blockSize
-	slotIdx := index % blockSize
-
-	if blockIdx >= len(cs.blocks) {
-		return
-	}
-
-	block := &cs.blocks[blockIdx]
-	block.filled[slotIdx] = false
 }
 
 // Has checks if a component exists at the given index
@@ -348,6 +368,8 @@ func (cs *ComponentStorage) compactGC() map[int]int {
 	}
 
 	cs.gcBlocks = tempBlocks
+	cs.freeSlots = nil
+	cs.nextIndex = writePos
 
 	return indexMap
 }
@@ -359,7 +381,8 @@ func (cs *ComponentStorage) compactBlock() map[int]int {
 	// Temporary buffer for the new compacted data
 	tempBlocks := make([]componentBlock, 0, len(cs.blocks))
 	var currentBlock componentBlock
-	currentBlock.data = make([]byte, cs.stride*blockSize)
+	blockBytes := cs.stride * blockSize
+	currentBlock.data = unsafe.Pointer(&make([]byte, blockBytes)[0])
 
 	// Iterate through all blocks and slots, copying filled slots to the beginning
 	for blockIdx := range cs.blocks {
@@ -378,14 +401,17 @@ func (cs *ComponentStorage) compactBlock() map[int]int {
 				if newSlotIdx == 0 && writePos > 0 {
 					tempBlocks = append(tempBlocks, currentBlock)
 					currentBlock = componentBlock{}
-					currentBlock.data = make([]byte, cs.stride*blockSize)
+					currentBlock.data = unsafe.Pointer(&make([]byte, blockBytes)[0])
 				}
 
-				// Copy component data
+				// Copy component data using raw pointers
 				srcOffset := uintptr(slotIdx) * cs.stride
 				dstOffset := uintptr(newSlotIdx) * cs.stride
-				srcBytes := block.data[srcOffset : srcOffset+cs.stride]
-				dstBytes := currentBlock.data[dstOffset : dstOffset+cs.stride]
+				srcPtr := unsafe.Pointer(uintptr(block.data) + srcOffset)
+				dstPtr := unsafe.Pointer(uintptr(currentBlock.data) + dstOffset)
+
+				srcBytes := unsafe.Slice((*byte)(srcPtr), cs.stride)
+				dstBytes := unsafe.Slice((*byte)(dstPtr), cs.stride)
 				copy(dstBytes, srcBytes)
 
 				// Mark slot as filled
@@ -412,11 +438,13 @@ func (cs *ComponentStorage) compactBlock() map[int]int {
 	// Keep at least one block even if empty
 	if len(tempBlocks) == 0 {
 		var emptyBlock componentBlock
-		emptyBlock.data = make([]byte, cs.stride*blockSize)
+		emptyBlock.data = unsafe.Pointer(&make([]byte, blockBytes)[0])
 		tempBlocks = []componentBlock{emptyBlock}
 	}
 
 	cs.blocks = tempBlocks
+	cs.freeSlots = nil
+	cs.nextIndex = writePos
 
 	return indexMap
 }

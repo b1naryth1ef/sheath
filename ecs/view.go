@@ -174,121 +174,52 @@ func (v *View[T]) Iter() iter.Seq2[EntityId, T] {
 				}
 			}
 
-			// Get the first component storage to determine entity count
-			// All storages in an archetype have the same capacity and indices
+			if len(archetype.storages) == 0 {
+				continue
+			}
 			firstStorage := archetype.storages[0]
 
-			// Pre-allocate result struct value for unsafe pointer operations
 			var result T
 			resultPtr := unsafe.Pointer(&result)
 
-			// Check if we're using GC storage (slower path) or block storage (fast path)
-			if firstStorage.containsPointers {
-				// GC storage path - iterate through blocks
-				for blockIdx, block := range firstStorage.gcBlocks {
-					for slotIdx := range blockSize {
-						if !block.filled[slotIdx] {
+			for entityIndex := range firstStorage.Iter() {
+				entityId := NewEntityId(archetypeId, uint32(entityIndex))
+
+				allRequiredComponentsFound := true
+				for i, storageIdx := range storageIndices {
+					fieldPtr := unsafe.Pointer(uintptr(resultPtr) + v.fieldOffset[i])
+
+					if storageIdx == -1 {
+						if v.optional[i] {
+							*(*unsafe.Pointer)(fieldPtr) = nil
 							continue
-						}
-
-						entityIndex := uint32(blockIdx*blockSize + slotIdx)
-						entityId := NewEntityId(archetypeId, entityIndex)
-
-						// Populate all components
-						allRequiredComponentsFound := true
-						for i, storageIdx := range storageIndices {
-							fieldPtr := unsafe.Pointer(uintptr(resultPtr) + v.fieldOffset[i])
-
-							if storageIdx == -1 {
-								if v.optional[i] {
-									*(*unsafe.Pointer)(fieldPtr) = nil
-									continue
-								} else {
-									allRequiredComponentsFound = false
-									break
-								}
-							}
-
-							component := archetype.storages[storageIdx].Get(int(entityIndex))
-							if component == nil {
-								if v.optional[i] {
-									*(*unsafe.Pointer)(fieldPtr) = nil
-									continue
-								} else {
-									allRequiredComponentsFound = false
-									break
-								}
-							}
-
-							componentPtr := (*iface)(unsafe.Pointer(&component)).data
-							*(*unsafe.Pointer)(fieldPtr) = componentPtr
-						}
-
-						if !allRequiredComponentsFound {
-							continue
-						}
-
-						if !yield(entityId, result) {
-							return
+						} else {
+							allRequiredComponentsFound = false
+							break
 						}
 					}
+
+					component := archetype.storages[storageIdx].Get(entityIndex)
+					if component == nil {
+						if v.optional[i] {
+							*(*unsafe.Pointer)(fieldPtr) = nil
+							continue
+						} else {
+							allRequiredComponentsFound = false
+							break
+						}
+					}
+
+					componentPtr := (*iface)(unsafe.Pointer(&component)).data
+					*(*unsafe.Pointer)(fieldPtr) = componentPtr
 				}
-				continue
-			}
 
-			// Block storage path (original fast path)
-			for blockIdx, block := range firstStorage.blocks {
-				for slotIdx := range blockSize {
-					if !block.filled[slotIdx] {
-						continue
-					}
+				if !allRequiredComponentsFound {
+					continue
+				}
 
-					entityIndex := uint32(blockIdx*blockSize + slotIdx)
-					entityId := NewEntityId(archetypeId, entityIndex)
-
-					// Populate all components using unsafe pointer arithmetic
-					allRequiredComponentsFound := true
-					for i, storageIdx := range storageIndices {
-						// Calculate the address of the field using the pre-computed offset
-						fieldPtr := unsafe.Pointer(uintptr(resultPtr) + v.fieldOffset[i])
-
-						if storageIdx == -1 {
-							if v.optional[i] {
-								// Optional component not in this archetype, set to nil
-								*(*unsafe.Pointer)(fieldPtr) = nil
-								continue
-							} else {
-								allRequiredComponentsFound = false
-								break
-							}
-						}
-
-						component := archetype.storages[storageIdx].Get(int(entityIndex))
-						if component == nil {
-							if v.optional[i] {
-								// Optional component is missing, set to nil
-								*(*unsafe.Pointer)(fieldPtr) = nil
-								continue
-							} else {
-								allRequiredComponentsFound = false
-								break
-							}
-						}
-
-						// Set the field to point to the component
-						// Extract the data pointer from the interface{}
-						componentPtr := (*iface)(unsafe.Pointer(&component)).data
-						*(*unsafe.Pointer)(fieldPtr) = componentPtr
-					}
-
-					if !allRequiredComponentsFound {
-						continue
-					}
-
-					// Yield the entity ID and view struct
-					if !yield(entityId, result) {
-						return
-					}
+				if !yield(entityId, result) {
+					return
 				}
 			}
 		}

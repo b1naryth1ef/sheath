@@ -15,6 +15,10 @@ type V2 struct{ B uint16 }
 type V3 struct{ C uint32 }
 type V4 struct{ D uint64 }
 
+func init() {
+	registerTestComponents()
+}
+
 // BenchmarkSpawnEntity tests entity spawning performance
 func BenchmarkSpawnEntity(b *testing.B) {
 	storage := ecs.NewStorage()
@@ -411,6 +415,7 @@ func BenchmarkPointerComponents(b *testing.B) {
 	type AI struct {
 		Target *Position
 	}
+	ecs.RegisterComponent[AI]()
 
 	target := &Position{X: 100.0, Y: 200.0}
 	ids := make([]ecs.EntityId, 10000)
@@ -436,6 +441,7 @@ func BenchmarkMixedComponents(b *testing.B) {
 	type Link struct {
 		Next *Name
 	}
+	ecs.RegisterComponent[Link]()
 
 	next := &Name{Value: "target"}
 	ids := make([]ecs.EntityId, 10000)
@@ -458,22 +464,27 @@ func BenchmarkStorageBySize(b *testing.B) {
 	type Tiny struct {
 		A uint8
 	}
+	ecs.RegisterComponent[Tiny]()
 
 	type Small struct {
 		A, B uint32
 	}
+	ecs.RegisterComponent[Small]()
 
 	type Medium struct {
 		A, B, C, D float32
 	}
+	ecs.RegisterComponent[Medium]()
 
 	type Large struct {
 		A, B, C, D, E, F, G, H float64
 	}
+	ecs.RegisterComponent[Large]()
 
 	type Huge struct {
 		Data [128]byte
 	}
+	ecs.RegisterComponent[Huge]()
 
 	runBenchmark := func(b *testing.B, component any, name string) {
 		b.Run(name, func(b *testing.B) {
@@ -507,22 +518,27 @@ func BenchmarkStorageBySizeWithPointers(b *testing.B) {
 	type TinyPtr struct {
 		A *uint8
 	}
+	ecs.RegisterComponent[TinyPtr]()
 
 	type SmallPtr struct {
 		A, B *uint32
 	}
+	ecs.RegisterComponent[SmallPtr]()
 
 	type MediumPtr struct {
 		A, B, C, D *float32
 	}
+	ecs.RegisterComponent[MediumPtr]()
 
 	type LargePtr struct {
 		A, B, C, D, E, F, G, H *float64
 	}
+	ecs.RegisterComponent[LargePtr]()
 
 	type HugePtr struct {
 		Data []*byte
 	}
+	ecs.RegisterComponent[HugePtr]()
 
 	val := uint8(1)
 	runBenchmark := func(b *testing.B, component any, name string) {
@@ -557,11 +573,13 @@ func BenchmarkCacheEfficiency(b *testing.B) {
 	type Component8 struct {
 		A, B uint32
 	}
+	ecs.RegisterComponent[Component8]()
 
 	type Component8Ptr struct {
 		A *uint32
 		B *uint32
 	}
+	ecs.RegisterComponent[Component8Ptr]()
 
 	b.Run("Sequential_Value", func(b *testing.B) {
 		storage := ecs.NewStorage()
@@ -670,6 +688,7 @@ func BenchmarkViewIterCacheEfficiency(b *testing.B) {
 	type Component16 struct {
 		A, B, C, D float32
 	}
+	ecs.RegisterComponent[Component16]()
 
 	type Component16Ptr struct {
 		A *float32
@@ -677,6 +696,7 @@ func BenchmarkViewIterCacheEfficiency(b *testing.B) {
 		C *float32
 		D *float32
 	}
+	ecs.RegisterComponent[Component16Ptr]()
 
 	b.Run("Value_10k", func(b *testing.B) {
 		storage := ecs.NewStorage()
@@ -736,6 +756,7 @@ func BenchmarkSpawn100kComparison(b *testing.B) {
 		type Link struct {
 			Next *Position
 		}
+		ecs.RegisterComponent[Link]()
 		next := &Position{X: 1.0, Y: 2.0}
 		for range b.N {
 			storage := ecs.NewStorage()
@@ -749,6 +770,7 @@ func BenchmarkSpawn100kComparison(b *testing.B) {
 		type AI struct {
 			Target *Position
 		}
+		ecs.RegisterComponent[AI]()
 		target := &Position{X: 1.0, Y: 2.0}
 		for range b.N {
 			storage := ecs.NewStorage()
