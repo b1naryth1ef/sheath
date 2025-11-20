@@ -61,7 +61,7 @@ func (cs *ComponentStorage) Append(item any) int {
 		block := &cs.blocks[blockIdx]
 
 		if block.filled != ^uint64(0) {
-			for slotIdx := 0; slotIdx < blockSize; slotIdx++ {
+			for slotIdx := range blockSize {
 				mask := uint64(1) << slotIdx
 				if block.filled&mask == 0 {
 					block.filled |= mask
@@ -155,4 +155,74 @@ func (cs *ComponentStorage) Has(index int) bool {
 	mask := uint64(1) << slotIdx
 
 	return block.filled&mask != 0
+}
+
+// Compact reorganizes component storage to remove empty slots and reduce fragmentation
+// Returns a map of old index -> new index for updating entity references
+func (cs *ComponentStorage) Compact() map[int]int {
+	indexMap := make(map[int]int)
+	writePos := 0
+
+	// Temporary buffer for the new compacted data
+	tempBlocks := make([]componentBlock, 0, len(cs.blocks))
+	currentBlock := componentBlock{
+		data:   make([]byte, cs.stride*blockSize),
+		filled: 0,
+	}
+
+	// Iterate through all blocks and slots, copying filled slots to the beginning
+	for blockIdx := range cs.blocks {
+		block := &cs.blocks[blockIdx]
+
+		for slotIdx := range blockSize {
+			mask := uint64(1) << slotIdx
+			if block.filled&mask != 0 {
+				oldIndex := blockIdx*blockSize + slotIdx
+
+				// Calculate new position
+				newSlotIdx := writePos % blockSize
+
+				indexMap[oldIndex] = writePos
+
+				// Allocate new block if needed
+				if newSlotIdx == 0 && writePos > 0 {
+					tempBlocks = append(tempBlocks, currentBlock)
+					currentBlock = componentBlock{
+						data:   make([]byte, cs.stride*blockSize),
+						filled: 0,
+					}
+				}
+
+				// Copy component data
+				srcOffset := uintptr(slotIdx) * cs.stride
+				dstOffset := uintptr(newSlotIdx) * cs.stride
+				srcBytes := block.data[srcOffset : srcOffset+cs.stride]
+				dstBytes := currentBlock.data[dstOffset : dstOffset+cs.stride]
+				copy(dstBytes, srcBytes)
+
+				// Mark slot as filled
+				currentBlock.filled |= uint64(1) << newSlotIdx
+
+				writePos++
+			}
+		}
+	}
+
+	// Append the last block if it has any data
+	if currentBlock.filled != 0 {
+		tempBlocks = append(tempBlocks, currentBlock)
+	}
+
+	// Replace old blocks with compacted blocks
+	// Keep at least one block even if empty
+	if len(tempBlocks) == 0 {
+		tempBlocks = []componentBlock{{
+			data:   make([]byte, cs.stride*blockSize),
+			filled: 0,
+		}}
+	}
+
+	cs.blocks = tempBlocks
+
+	return indexMap
 }

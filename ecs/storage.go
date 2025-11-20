@@ -4,18 +4,72 @@ import (
 	"reflect"
 	"sort"
 	"unsafe"
+
+	"github.com/kamstrup/intmap"
 )
+
+type reference struct {
+	ref     EntityRef
+	current EntityId
+	deleted bool
+}
 
 // Storage is the main ECS storage interface
 type Storage struct {
 	archetypes map[uint32]*Archetype
+	refs       *intmap.Map[EntityRef, *reference]
+
+	refId EntityRef
 }
 
 // NewStorage creates a new ECS storage system
 func NewStorage() *Storage {
 	return &Storage{
 		archetypes: make(map[uint32]*Archetype),
+		refs:       intmap.New[EntityRef, *reference](256),
 	}
+}
+
+func (s *Storage) CreateEntityRef(id EntityId) EntityRef {
+	existing, ok := s.archetypes[id.ArchetypeId()].refs.Get(id)
+	if ok {
+		return existing.ref
+	}
+
+	refId := s.refId
+	s.refId++
+
+	ref := &reference{
+		ref:     refId,
+		current: id,
+		deleted: false,
+	}
+
+	s.refs.Put(refId, ref)
+	s.archetypes[id.ArchetypeId()].refs.Put(id, ref)
+
+	return refId
+}
+
+func (s *Storage) ResolveEntityRef(refId EntityRef) (EntityId, bool) {
+	ref, ok := s.refs.Get(refId)
+	if !ok {
+		return 0, false
+	}
+	if ref.deleted {
+		return 0, false
+	}
+	return ref.current, true
+}
+
+func (s *Storage) InvalidateEntityRef(refId EntityRef) bool {
+	ref, ok := s.refs.Get(refId)
+	if !ok {
+		return false
+	}
+	s.archetypes[ref.current.ArchetypeId()].refs.Del(ref.current)
+	s.refs.Del(refId)
+	return true
 }
 
 // GetArchetype returns an archetype storage (if one exists)

@@ -5,6 +5,7 @@ go 1.25
 require (
 	github.com/alioygur/gores v1.2.2
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/kamstrup/intmap v0.5.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.60.1
 	github.com/stretchr/testify v1.9.0

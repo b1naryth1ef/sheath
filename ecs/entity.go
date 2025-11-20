@@ -17,3 +17,11 @@ func (e EntityId) ArchetypeId() uint32 {
 func (e EntityId) Index() uint32 {
 	return uint32(e & 0xFFFFFFFF)
 }
+
+// EntityRef is a stable reference to an entity
+type EntityRef uint64
+
+type entityRefMetadata struct {
+	archetype *Archetype
+	id        EntityId
+}
