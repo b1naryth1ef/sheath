@@ -122,6 +122,20 @@ func (v *View[T]) Get(id EntityId) *T {
 	return &result
 }
 
+// GetRef returns a populated view struct for the given entity ref, or nil if invalid
+func (v *View[T]) GetRef(ref EntityRef) *T {
+	entityId, ok := v.storage.ResolveEntityRef(ref)
+	if !ok {
+		return nil
+	}
+
+	var result T
+	if !v.Fill(entityId, &result) {
+		return nil
+	}
+	return &result
+}
+
 // matchesArchetype checks if an archetype contains all the required component types for this view
 // Optional components are not checked - they may or may not be present
 func (v *View[T]) matchesArchetype(archetype *Archetype) bool {

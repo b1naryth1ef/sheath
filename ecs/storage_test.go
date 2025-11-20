@@ -439,20 +439,6 @@ func TestAddComponentWithEntityRef(t *testing.T) {
 	assert.Equal(t, float32(1.0), vel.DX)
 }
 
-func TestAddComponentAlreadyExists(t *testing.T) {
-	storage := ecs.NewStorage()
-
-	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
-	oldArchetypeId := id.ArchetypeId()
-
-	storage.AddComponent(id, &Position{X: 99.0, Y: 99.0})
-
-	assert.Equal(t, oldArchetypeId, id.ArchetypeId())
-
-	pos := storage.GetComponent(id, reflect.TypeOf(Position{})).(*Position)
-	assert.Equal(t, float32(1.0), pos.X)
-}
-
 func TestRemoveComponent(t *testing.T) {
 	storage := ecs.NewStorage()
 
@@ -509,15 +495,4 @@ func TestRemoveLastComponent(t *testing.T) {
 
 	comp := storage.GetComponent(id, reflect.TypeOf(Position{}))
 	assert.Nil(t, comp)
-}
-
-func TestRemoveComponentNotExists(t *testing.T) {
-	storage := ecs.NewStorage()
-
-	id := storage.Spawn(&Position{X: 1.0, Y: 2.0})
-
-	storage.RemoveComponent(id, reflect.TypeOf(Velocity{}))
-
-	pos := storage.GetComponent(id, reflect.TypeOf(Position{})).(*Position)
-	assert.Equal(t, float32(1.0), pos.X)
 }
